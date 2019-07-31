@@ -8,7 +8,7 @@ export type Either<a, b> = {
     value: b
   }
   
-  export let inl = <a, b>(): Func<a, Either<a, b>> => {
+  export let left = <a, b>(): Func<a, Either<a, b>> => {
     return Func<a, Either<a, b>>((x: a) => {
       return {
       kind: "left",
@@ -16,7 +16,7 @@ export type Either<a, b> = {
     }})
   }
   
-  export let inr = <a, b>(): Func<b, Either<a, b>> => {
+  export let right = <a, b>(): Func<b, Either<a, b>> => {
     return Func<b, Either<a, b>>((x: b) => {
       return {
       kind: "right",
@@ -28,18 +28,18 @@ export type Either<a, b> = {
     Func<Either<a, b>, Either<a1, b1>> => {
       return Func((e: Either<a, b>): Either<a1, b1> => {
         if (e.kind == "left") {
-          let newValue = f.f(e.value)
-          return inl<a1, b1>().f(newValue)
+          let newValue = f.invoke(e.value)
+          return left<a1, b1>().invoke(newValue)
         }
         else {
-          let newValue = g.f(e.value)
-          return inr<a1, b1>().f(newValue)
+          let newValue = g.invoke(e.value)
+          return right<a1, b1>().invoke(newValue)
         }
       }) // e.kind == "Left" ? f.then(inl()) : g.then(inr()) 
   }
   
-  export let unit_Either = <a, b>() : Func<a,Either<b,a>> => inr<b,a>()
+  export let unit_Either = <a, b>() : Func<a,Either<b,a>> => right<b,a>()
   
   export let join_Either = <a, b>() : Func<Either<b,Either<b,a>>, Either<b,a>> =>
-    Func(x => x.kind == "left" ? inl<b,a>().f(x.value)
+    Func(x => x.kind == "left" ? left<b,a>().invoke(x.value)
                   : x.value)

@@ -13,6 +13,6 @@ export type Pair<a, b> = {
   }
   
   export let map_Pair = <a, a1, b, b1>(f: Func<a, a1>, g: Func<b, b1>): Func<Pair<a, b>, Pair<a1, b1>> => {
-    return Func((p: Pair<a, b>) => Pair<a1, b1>(f.f(p.fst), g.f(p.snd)))
+    return Func((p: Pair<a, b>) => Pair<a1, b1>(f.invoke(p.fst), g.invoke(p.snd)))
   }
   
