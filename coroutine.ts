@@ -22,7 +22,8 @@ interface Continuation<S, E, A> extends Pair<S, Coroutine<S, E, A>> { }
 // completed_Coroutine returns a `Func` that lifts its input value of `A`, into a
 // successfully completed `Coroutine`.
 let completed_Coroutine = <S, E, A>(): Func<A, Coroutine<S, E, A>> =>
-    Func(value => Func(state => right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(value,state))))
+    Func(value => Func(state => right<NoRes<S, E, A>, Pair<A, S>>()
+        .invoke(Pair<A, S>(value,state))))
 
 // suspend_Coroutine returns a suspended `Coroutine` that does nothing until it is resumed.
 let suspend_Coroutine = <S, E>(): Coroutine<S, E, Unit> =>
@@ -39,7 +40,9 @@ let suspend_Coroutine = <S, E>(): Coroutine<S, E, Unit> =>
 // failed_Coroutine returns a `Func` that lifts an error value of `E`, into a
 // failed `Coroutine`.
 let failed_Coroutine = <S, E, A>(): Func<E, Coroutine<S, E, A>> =>
-    Func(error => Func(state => left<NoRes<S, E, A>, Pair<A, S>>().invoke(left<E, Continuation<S, E, A>>().invoke(error))))
+    Func(error => Func(state => left<NoRes<S, E, A>, Pair<A, S>>()
+        .invoke(left<E, Continuation<S, E, A>>()
+        .invoke(error))))
 
 // map_Coroutine performs a transformation of `Coroutine<S, E, A>` to `Coroutine<S, E, B>`.
 let map_Coroutine = <S, E, A, B>(f: Func<A, B>): Func<Coroutine<S, E, A>, Coroutine<S, E, B>> =>
@@ -49,19 +52,19 @@ let map_Coroutine = <S, E, A, B>(f: Func<A, B>): Func<Coroutine<S, E, A>, Corout
 
         // Then check if the coroutine has been suspended/failed or if it has a result.
         if (processState.kind == "left") {
-            let failedOrSuspended: NoRes<S, E, A> = processState.value
+            let failedOrContinuous: NoRes<S, E, A> = processState.value
 
             // Coroutine has been suspended or has failed. So now we have to check which one it is.
-            if (failedOrSuspended.kind == "left") {
+            if (failedOrContinuous.kind == "left") {
                 // Coroutine has failed to process a result.
-                let errorValue = failedOrSuspended.value
+                let errorValue = failedOrContinuous.value
 
                 return left<E, Continuation<S, E, B>>()
                     .andThen(left<NoRes<S, E, B>, Pair<B, S>>())
                     .invoke(errorValue)
             } else {
-                // Coroutine has been suspended.
-                let suspensionValue = failedOrSuspended.value
+                // Coroutine has a continuation.
+                let suspensionValue = failedOrContinuous.value
 
                 return map_Pair(id<S>(), map_Coroutine<S, E, A, B>(f))
                     .andThen(right<E, Continuation<S, E, B>>())
@@ -77,25 +80,44 @@ let map_Coroutine = <S, E, A, B>(f: Func<A, B>): Func<Coroutine<S, E, A>, Corout
         }
     }))
 
+// join_Coroutine flattens a nested `Coroutine` type into a single-level `Coroutine`.
 let join_Coroutine = <S, E, A>(): Func<Coroutine<S, E, Coroutine<S, E, A>>, Coroutine<S, E, A>> =>
     Func(nested => Func(state => {
-        let processState = nested.invoke(state)
+        // Invoke the nested `Coroutine`  to find out its current state (suspended, failed or succeeded).
+        let processState: Either<NoRes<S, E, Coroutine<S, E, A>>, Pair<Coroutine<S, E, A>, S>> = nested.invoke(state)
+
+        // Then check if the coroutine has a continuation, has failed or if it has a result.
         if (processState.kind == "left") {
+            // Coroutine has a continuation or has failed. So now we have to check which one it is.
             if(processState.value.kind == "left") {
-                return left<E, Continuation<S,E,A>>().andThen(left<NoRes<S,E,A>, Pair<A,S>>()).invoke(processState.value.value)
+                // Coroutine has failed to process a result.
+                return left<E, Continuation<S,E,A>>()
+                    .andThen(left<NoRes<S,E,A>, Pair<A,S>>())
+                    .invoke(processState.value.value)
             } else {
-                let rest = processState.value.value
-                let step1 = map_Pair(id<S>(), join_Coroutine<S,E,A>()).invoke(rest)
-                let step2 = right<E, Continuation<S,E,A>>().invoke(step1)
-                let step3 = left<NoRes<S,E,A>, Pair<A,S>>().invoke(step2)
-                return step3
+                 // Coroutine has a continuation.
+                let continuation = processState.value.value
+
+                return map_Pair(id<S>(), join_Coroutine<S,E,A>())
+                    .andThen(right<E, Continuation<S,E,A>>())
+                    .andThen(left<NoRes<S,E,A>, Pair<A,S>>())
+                    .invoke(continuation)
             }
-        } else {
-            let rest = processState.value
-            let step1 = rest.fst.invoke(rest.snd)
-            return step1
+        } else { // The coroutine has successfully computed a result!
+            // extracts the result of the double layered `Coroutine`, which is another
+            // `Coroutine` and a state of `S`.
+            let computedValue: Pair<Coroutine<S, E, A>, S> = processState.value
+
+            // Extracts the `Coroutine` and the state of `S`.
+            let next: Coroutine<S, E, A> = computedValue.fst
+            let stateOfCoroutine: S = computedValue.snd
+
+            // And invoke that coroutine with that state
+            return next.invoke(stateOfCoroutine)
         }
     }))
 
+// bind_Coroutine binds a `Coroutine<S, E, A>` to a `Coroutine<S, E, B>`, sequencing the
+// computation in order.
 let bind_Coroutine = <S, E, A, B>(f: Func<A, Coroutine<S, E, B>>): Func<Coroutine<S, E, A>, Coroutine<S, E, B>> =>
     map_Coroutine<S, E, A, Coroutine<S, E, B>>(f).andThen(join_Coroutine())
