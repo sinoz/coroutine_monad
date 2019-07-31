@@ -5,15 +5,14 @@ import { Pair, map_Pair } from "./pair"
 // A `Coroutine` represents an effectful operation that can be suspended at
 // runtime without consuming resources, thus yielding cooperatively.
 // When invoked, a Coroutine takes a State to perform the operation on, and
-// either returns a `NoRes`, which is an indicator of the Coroutine being
-// suspended or having failed, or, it returns a Pair with the result of
+// either returns a `NoRes`, which is an indicator of the Coroutine continuing
+// its computation or having failed, or, it returns a Pair with the result of
 // `A` and the new state of `S`. When returned the Pair, it is to be assumed
 // that the Coroutine has completed its course.
 type Coroutine<S, E, A> = Func<S, Either<NoRes<S, E, A>, Pair<A, S>>>
 
-// NoRes is an indicator of the `Coroutine` type either being suspended or
-// having failed. When suspended, it returns a `Continuation` and when failed,
-// it is to return a failure of type `E`.
+// NoRes is an indicator of the `Coroutine` type either continuing its computation
+// through another coroutine, or, having failed to compute a value entirely.
 type NoRes<S, E, A> = Either<E, Continuation<S, E, A>>
 
 // `Continuation` is the symbolic representation of the rest of the monadic
