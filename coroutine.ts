@@ -19,15 +19,14 @@ type NoRes<S, E, A> = Either<E, Continuation<S, E, A>>
 // `Coroutine` program.
 interface Continuation<S, E, A> extends Pair<S, Coroutine<S, E, A>> { }
 
-// completed_Coroutine returns a `Func` that lifts its input value of `A`, into a
-// successfully completed `Coroutine`.
+// completed_Coroutine lifts the input value of `A`, into a successfully completed `Coroutine`.
 let completed_Coroutine = <S, E, A>(): Func<A, Coroutine<S, E, A>> =>
     Func(value => Func(state => right<NoRes<S, E, A>, Pair<A, S>>()
         .invoke(Pair<A, S>(value,state))))
 
 // suspend_Coroutine returns a suspended `Coroutine` that does nothing until it is resumed.
 let suspend_Coroutine = <S, E>(): Coroutine<S, E, Unit> =>
-    Func(state => {
+    Func(state => { // TODO clean up
         let x: Func<NoRes<S, E, Unit>, Unit> = left<NoRes<S, E, Unit>, Unit>()
         let z: Func<Continuation<S, E, Unit>, NoRes<S, E, Unit>> = right<E, Continuation<S, E, Unit>>()
 
@@ -37,8 +36,8 @@ let suspend_Coroutine = <S, E>(): Coroutine<S, E, Unit> =>
         return left<NoRes<S, E, Unit>, Pair<Unit, S>>().invoke(result)
     })
 
-// failed_Coroutine returns a `Func` that lifts an error value of `E`, into a
-// failed `Coroutine`.
+// failed_Coroutine lifts an error value of `E`, into a `Coroutine` that has failed
+// to produce a value, thus returning the lifted value of `E`.
 let failed_Coroutine = <S, E, A>(): Func<E, Coroutine<S, E, A>> =>
     Func(error => Func(state => left<NoRes<S, E, A>, Pair<A, S>>()
         .invoke(left<E, Continuation<S, E, A>>()
@@ -47,14 +46,14 @@ let failed_Coroutine = <S, E, A>(): Func<E, Coroutine<S, E, A>> =>
 // map_Coroutine performs a transformation of `Coroutine<S, E, A>` to `Coroutine<S, E, B>`.
 let map_Coroutine = <S, E, A, B>(f: Func<A, B>): Func<Coroutine<S, E, A>, Coroutine<S, E, B>> =>
     Func(c1 => Func(state => {
-        // Invoke the coroutine to find out its current state (suspended, failed or succeeded).
+        // Invoke the coroutine to find out its current state (continued, failed or succeeded).
         let processState: Either<NoRes<S, E, A>, Pair<A, S>> = c1.invoke(state)
 
-        // Then check if the coroutine has been suspended/failed or if it has a result.
+        // Then check if the coroutine has a continuation, has failed or if it has a result.
         if (processState.kind == "left") {
             let failedOrContinuous: NoRes<S, E, A> = processState.value
 
-            // Coroutine has been suspended or has failed. So now we have to check which one it is.
+            // Coroutine has a continuation or has failed. So now we have to check which one it is.
             if (failedOrContinuous.kind == "left") {
                 // Coroutine has failed to process a result.
                 let errorValue = failedOrContinuous.value
@@ -83,7 +82,7 @@ let map_Coroutine = <S, E, A, B>(f: Func<A, B>): Func<Coroutine<S, E, A>, Corout
 // join_Coroutine flattens a nested `Coroutine` type into a single-level `Coroutine`.
 let join_Coroutine = <S, E, A>(): Func<Coroutine<S, E, Coroutine<S, E, A>>, Coroutine<S, E, A>> =>
     Func(nested => Func(state => {
-        // Invoke the nested `Coroutine`  to find out its current state (suspended, failed or succeeded).
+        // Invoke the nested `Coroutine` to find out its current state (continued, failed or succeeded).
         let processState: Either<NoRes<S, E, Coroutine<S, E, A>>, Pair<Coroutine<S, E, A>, S>> = nested.invoke(state)
 
         // Then check if the coroutine has a continuation, has failed or if it has a result.
@@ -117,7 +116,6 @@ let join_Coroutine = <S, E, A>(): Func<Coroutine<S, E, Coroutine<S, E, A>>, Coro
         }
     }))
 
-// bind_Coroutine binds a `Coroutine<S, E, A>` to a `Coroutine<S, E, B>`, sequencing the
-// computation in order.
+// bind_Coroutine binds a `Coroutine<S, E, A>` to a `Coroutine<S, E, B>`, sequencing the  computation in order.
 let bind_Coroutine = <S, E, A, B>(f: Func<A, Coroutine<S, E, B>>): Func<Coroutine<S, E, A>, Coroutine<S, E, B>> =>
     map_Coroutine<S, E, A, Coroutine<S, E, B>>(f).andThen(join_Coroutine())
