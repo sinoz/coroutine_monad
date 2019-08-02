@@ -65,15 +65,17 @@ let join_Coroutine = <S, E, A>(): Func<Coroutine<S, E, Coroutine<S, E, A>>, Coro
 
         // Then check if the coroutine has a continuation, has failed or if it has a result.
         if (processState.kind == "left") {
+            let failedOrContinuous: NoRes<S, E, Coroutine<S, E, A>> = processState.value
+
             // Coroutine has a continuation or has failed. So now we have to check which one it is.
-            if(processState.value.kind == "left") {
+            if(failedOrContinuous.kind == "left") {
                 // Coroutine has failed to process a result.
                 return left<E, Continuation<S,E,A>>()
                     .andThen(left<NoRes<S,E,A>, Pair<A,S>>())
-                    .invoke(processState.value.value)
+                    .invoke(failedOrContinuous.value)
             } else {
                  // Coroutine has a continuation.
-                let continuation = processState.value.value
+                let continuation = failedOrContinuous.value
 
                 return map_Pair(id<S>(), join_Coroutine<S,E,A>())
                     .andThen(right<E, Continuation<S,E,A>>())
@@ -126,6 +128,37 @@ export let succeedLazy = <S, A>(f: Func<Unit, A>): Coroutine<S, Unit, A> =>
 // an exception, is undefined.
 export let Do = <S>(f: (_: S) => S): Coroutine<S, Unit, S> =>
     Func(state => right<NoRes<S, Unit, S>, Pair<S, S>>().invoke(Pair<S, S>(f(state), state)))
+
+// RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
+// The execution is interrupted if an error was raised from the executed `process` coroutine.
+export let RepeatUntil = <S, E, A>(p: (_: S) => boolean, process: Coroutine<S, E, A>): Coroutine<S, E, S> =>
+    Func(state => {
+        // TODO invoke process recursively operating on the state of the last iteration
+        let processState: Either<NoRes<S, E, A>, Pair<A, S>> = process.invoke(state)
+
+        // Then check if the coroutine has a continuation, has failed or if it has a result.
+        if (processState.kind == "left") {
+            let failedOrContinuous: NoRes<S, E, A> = processState.value
+             
+            // Coroutine has a continuation or has failed. So now we have to check which one it is.
+            if (failedOrContinuous.kind == "left") {
+                // Coroutine has failed to process a result.
+                let errorValue = failedOrContinuous.value
+
+                throw new Error("TODO")
+            } else {
+                // Coroutine has a continuation.
+                let continuation = failedOrContinuous.value
+
+                throw new Error("TODO")
+            }
+        } else { // The coroutine has successfully computed a result!
+            let computedValue = processState.value
+            let newState = computedValue.snd
+
+            throw new Error("TODO")
+        }
+    })
 
 // suspend returns a suspended `Coroutine` that does nothing until it is resumed.
 export let suspend = <S, E>(): Coroutine<S, E, Unit> =>
