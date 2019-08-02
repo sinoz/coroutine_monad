@@ -123,11 +123,37 @@ export let completed = <S, A>(a: A): Coroutine<S, Unit, A> =>
 export let succeedLazy = <S, A>(f: Func<Unit, A>): Coroutine<S, Unit, A> =>
     lazyUnit_Coroutine(f)
 
+// effect lifts the effect of `f`, which may throw an exception, into a Coroutine.
+export let effect = <E, A>(f: (_: Unit) => A): Coroutine<Unit, E, A> =>
+    Func(state => {
+        try {
+            return right<NoRes<Unit, E, A>, Pair<A, Unit>>().invoke(Pair<A, Unit>(f({}), {}))
+        } catch (e) {
+            return left<NoRes<Unit, E, A>, Pair<A, Unit>>().invoke(left<E, Continuation<Unit, E, A>>().invoke(e))
+        }
+    })
+
+// effectFunc lifts the effect of `f`, which may throw an exception, into a Coroutine.
+export let effectFunc = <E, A>(f: Func<Unit, A>): Coroutine<Unit, E, A> =>
+    Func(state => {
+        try {
+            return right<NoRes<Unit, E, A>, Pair<A, Unit>>().invoke(Pair<A, Unit>(f.invoke({}), {}))
+        } catch (e) {
+            return left<NoRes<Unit, E, A>, Pair<A, Unit>>().invoke(left<E, Continuation<Unit, E, A>>().invoke(e))
+        }
+    })
+
 // Do performs a state transformation from one instance of `S` to another instance of `S`. It is expected that
 // the function that is passed in as an argument, CANNOT fail. The behaviour for passing a function that throws
 // an exception, is undefined.
 export let Do = <S>(f: (_: S) => S): Coroutine<S, Unit, S> =>
     Func(state => right<NoRes<S, Unit, S>, Pair<S, S>>().invoke(Pair<S, S>(f(state), state)))
+
+// DoFunc performs a state transformation from one instance of `S` to another instance of `S`. It is expected that
+// the function that is passed in as an argument, CANNOT fail. The behaviour for passing a function that throws
+// an exception, is undefined.
+export let DoFunc = <S>(f: Func<S, S>): Coroutine<S, Unit, S> =>
+    Func(state => right<NoRes<S, Unit, S>, Pair<S, S>>().invoke(Pair<S, S>(f.invoke(state), state)))
 
 // RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
