@@ -102,52 +102,40 @@ let bind_Coroutine = <S, E, A, B>(f: Func<A, Coroutine<S, E, B>>): Func<Coroutin
 
 // unit_Coroutine eagerly lifts the input value of `A`, into a successfully completed `Coroutine`.
 let unit_Coroutine = <S, E, A>(a: A): Coroutine<S, E, A> =>
-    lazyUnit_Coroutine(Func(() => a))
+    lazyUnit_Coroutine(() => a)
 
 // lazyUnit_Coroutine lazily lifts the input value of `A`, into a successfully completed `Coroutine`.
-let lazyUnit_Coroutine = <S, E, A>(f: Func<Unit, A>): Coroutine<S, E, A> =>
-    Func(state => right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(f.invoke({}), state)))
-
-// succeed is an alias for `unit_Coroutine`. Do NOT pass in values (e.g through a function call)
-// that can throw exceptions as this CAN cause undefined behaviour.
-export let succeed = <S, A>(a: A): Coroutine<S, Unit, A> =>
-    unit_Coroutine(a)
+let lazyUnit_Coroutine = <S, E, A>(f: (_: Unit) => A): Coroutine<S, E, A> =>
+    Func(state => right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(f({}), state)))
 
 // completed is an alias for `unit_Coroutine`. Do NOT pass in values (e.g through a function call)
 // that can throw exceptions as this CAN cause undefined behaviour.
 export let completed = <S, A>(a: A): Coroutine<S, Unit, A> =>
     unit_Coroutine(a)
 
-// succeedLazy is an alias for `lazyUnit_Coroutine`. Do NOT pass in functions that can throw exceptions
-// as this CAN cause undefined behaviour.
-export let succeedLazy = <S, A>(f: Func<Unit, A>): Coroutine<S, Unit, A> =>
+// completedLazy is an alias for `lazyUnit_Coroutine`. Do NOT pass in functions that can throw
+// exceptions as this CAN cause undefined behaviour.
+export let completedLazy = <S, A>(f: (_: Unit) => A): Coroutine<S, Unit, A> =>
     lazyUnit_Coroutine(f)
 
-// effect lifts the effect of `f`, which may throw an exception, into a Coroutine.
+// effect lifts the effect of `f` into a Coroutine. Unlike the `compute` operator, this operator
+// does not operate on a state and can be used for effects such as  database calls, network / file IO, etc.
 export let effect = <E, A>(f: (_: Unit) => A): Coroutine<Unit, E, A> =>
+    compute<Unit, E, A>(s => f({}))
+
+// transform lifts the specified transformation of `f`, from one instance of `S` to another instance of `S`.
+export let transform = <S, E>(f: (_: S) => S): Coroutine<S, E, S> =>
+    compute<S, E, S>(f)
+
+// compute lifts the specified computation of `f` into a Coroutine.
+export let compute = <S, E, A>(f: (_: S) => A): Coroutine<S, E, A> =>
     Func(state => {
         try {
-            return right<NoRes<Unit, E, A>, Pair<A, Unit>>().invoke(Pair<A, Unit>(f({}), {}))
+            return right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(f(state), state))
         } catch (e) {
-            return left<NoRes<Unit, E, A>, Pair<A, Unit>>().invoke(left<E, Continuation<Unit, E, A>>().invoke(e))
+            return left<NoRes<S, E, A>, Pair<A, S>>().invoke(left<E, Continuation<S, E, A>>().invoke(e))
         }
     })
-
-// effectFunc lifts the effect of `f`, which may throw an exception, into a Coroutine.
-export let effectFunc = <E, A>(f: Func<Unit, A>): Coroutine<Unit, E, A> =>
-    effect(f.invoke)
-
-// Do performs a state transformation from one instance of `S` to another instance of `S`. It is expected that
-// the function that is passed in as an argument, CANNOT fail. The behaviour for passing a function that throws
-// an exception, is undefined.
-export let Do = <S>(f: (_: S) => S): Coroutine<S, Unit, S> =>
-    Func(state => right<NoRes<S, Unit, S>, Pair<S, S>>().invoke(Pair<S, S>(f(state), state)))
-
-// DoFunc performs a state transformation from one instance of `S` to another instance of `S`. It is expected that
-// the function that is passed in as an argument, CANNOT fail. The behaviour for passing a function that throws
-// an exception, is undefined.
-export let DoFunc = <S>(f: Func<S, S>): Coroutine<S, Unit, S> =>
-    Do(f.invoke)
 
 // RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
