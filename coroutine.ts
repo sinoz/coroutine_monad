@@ -1,5 +1,5 @@
 import { Either, left, right } from "./either"
-import { Unit, Func, id } from "./func"
+import { Unit, Func, identity } from "./func"
 import { Pair, map_Pair } from "./pair"
 
 // A `Coroutine` represents an effectful operation that can be suspended at
@@ -43,7 +43,7 @@ let map_Coroutine = <S, E, A, B>(f: Func<A, B>): Func<Coroutine<S, E, A>, Corout
                 // Coroutine has a continuation.
                 let suspensionValue = failedOrContinuous.value
 
-                return map_Pair(id<S>(), map_Coroutine<S, E, A, B>(f))
+                return map_Pair(identity<S>(), map_Coroutine<S, E, A, B>(f))
                     .andThen(right<E, Continuation<S, E, B>>())
                     .andThen(left<NoRes<S ,E, B>, Pair<B, S>>())
                     .invoke(suspensionValue)
@@ -51,7 +51,7 @@ let map_Coroutine = <S, E, A, B>(f: Func<A, B>): Func<Coroutine<S, E, A>, Corout
         } else { // The coroutine has successfully computed a result!
             let computedValue = processState.value
 
-            return map_Pair(f, id<S>())
+            return map_Pair(f, identity<S>())
                 .andThen(right<NoRes<S, E, B>, Pair<B, S>>())
                 .invoke(computedValue)
         }
@@ -77,7 +77,7 @@ let join_Coroutine = <S, E, A>(): Func<Coroutine<S, E, Coroutine<S, E, A>>, Coro
                  // Coroutine has a continuation.
                 let continuation = failedOrContinuous.value
 
-                return map_Pair(id<S>(), join_Coroutine<S,E,A>())
+                return map_Pair(identity<S>(), join_Coroutine<S,E,A>())
                     .andThen(right<E, Continuation<S,E,A>>())
                     .andThen(left<NoRes<S,E,A>, Pair<A,S>>())
                     .invoke(continuation)

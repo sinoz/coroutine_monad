@@ -5,7 +5,7 @@ export interface Func<a, b> {
     andThen: <c>(g: Func<b, c>) => Func<a, c>
 }
 
-export let id = <a>(): Func<a, a> => Func((x: a) => x)
+export let identity = <a>(): Func<a, a> => Func((x: a) => x)
 
 export let Func = <a, b>(f: (_: a) => b): Func<a, b> => {
     return {
