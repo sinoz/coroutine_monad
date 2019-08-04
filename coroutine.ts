@@ -1,6 +1,7 @@
 import { Either, left, right } from "./either"
 import { Unit, Func, identity } from "./func"
 import { Pair, map_Pair } from "./pair"
+import { Option } from "./option"
 
 // A `Coroutine` represents an effectful operation that can be suspended at
 // runtime without consuming resources, thus yielding cooperatively.
@@ -102,21 +103,31 @@ let bind_Coroutine = <S, E, A, B>(f: Func<A, Coroutine<S, E, B>>): Func<Coroutin
 
 // unit_Coroutine eagerly lifts the input value of `A`, into a successfully completed `Coroutine`.
 let unit_Coroutine = <S, E, A>(a: A): Coroutine<S, E, A> =>
-    lazyUnit_Coroutine(() => a)
-
-// lazyUnit_Coroutine lazily lifts the input value of `A`, into a successfully completed `Coroutine`.
-let lazyUnit_Coroutine = <S, E, A>(f: (_: Unit) => A): Coroutine<S, E, A> =>
-    Func(state => right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(f({}), state)))
+    Func(state => right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(a, state)))
 
 // completed is an alias for `unit_Coroutine`. Do NOT pass in values (e.g through a function call)
 // that can throw exceptions as this CAN cause undefined behaviour.
 export let completed = <S, A>(a: A): Coroutine<S, Unit, A> =>
     unit_Coroutine(a)
 
-// completedLazy is an alias for `lazyUnit_Coroutine`. Do NOT pass in functions that can throw
-// exceptions as this CAN cause undefined behaviour.
-export let completedLazy = <S, A>(f: (_: Unit) => A): Coroutine<S, Unit, A> =>
-    lazyUnit_Coroutine(f)
+// suspend returns a suspended `Coroutine` that does nothing until it is resumed.
+export let suspend = <S, E>(): Coroutine<S, E, Unit> =>
+    Func(state => { // TODO clean up
+        let x: Func<NoRes<S, E, Unit>, Unit> = left<NoRes<S, E, Unit>, Unit>()
+        let z: Func<Continuation<S, E, Unit>, NoRes<S, E, Unit>> = right<E, Continuation<S, E, Unit>>()
+
+        let y: Coroutine<S, E, Unit> = unit_Coroutine<S, E, Unit>({})
+        let k: NoRes<S, E, Unit> = z.invoke({ fst: state, snd: y})
+
+        return left<NoRes<S, E, Unit>, Pair<Unit, S>>().invoke(k)
+    })
+
+// fail lifts an error value of `E`, into a `Coroutine` that has failed to produce a value,
+// thus returning the lifted value of `E`.
+export let failWith = <S, E, A>(e: E): Coroutine<S, E, A> =>
+    Func(state => left<NoRes<S, E, A>, Pair<A, S>>()
+        .invoke(left<E, Continuation<S, E, A>>()
+        .invoke(e)))
 
 // effect lifts the effect of `f` into a Coroutine. Unlike the `compute` operator, this operator
 // does not operate on a state and can be used for effects such as  database calls, network / file IO, etc.
@@ -136,6 +147,14 @@ export let compute = <S, E, A>(f: (_: S) => A): Coroutine<S, E, A> =>
             return left<NoRes<S, E, A>, Pair<A, S>>().invoke(left<E, Continuation<S, E, A>>().invoke(e))
         }
     })
+
+// fromOption lifts the given `Option` type into a `Coroutine`.
+export let fromOption = <S, A>(opt: Option<A>): Coroutine<S, Unit, A> =>
+    opt.kind == "none" ? failWith({}) : unit_Coroutine(opt.value)
+
+// fromEither lifts the given `Either` type into a `Coroutine`.
+export let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
+    either.kind == "left" ? failWith(either.value) : unit_Coroutine(either.value)
 
 // RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
@@ -167,22 +186,3 @@ export let RepeatUntil = <S, E, A>(p: (_: S) => boolean, process: Coroutine<S, E
             throw new Error("TODO")
         }
     })
-
-// suspend returns a suspended `Coroutine` that does nothing until it is resumed.
-export let suspend = <S, E>(): Coroutine<S, E, Unit> =>
-    Func(state => { // TODO clean up
-        let x: Func<NoRes<S, E, Unit>, Unit> = left<NoRes<S, E, Unit>, Unit>()
-        let z: Func<Continuation<S, E, Unit>, NoRes<S, E, Unit>> = right<E, Continuation<S, E, Unit>>()
-
-        let y: Coroutine<S, E, Unit> = unit_Coroutine<S, E, Unit>({})
-        let k: NoRes<S, E, Unit> = z.invoke({ fst: state, snd: y})
-
-        return left<NoRes<S, E, Unit>, Pair<Unit, S>>().invoke(k)
-    })
-
-// fail lifts an error value of `E`, into a `Coroutine` that has failed to produce a value,
-// thus returning the lifted value of `E`.
-export let fail = <S, E, A>(e: E): Coroutine<S, E, A> =>
-    Func(state => left<NoRes<S, E, A>, Pair<A, S>>()
-        .invoke(left<E, Continuation<S, E, A>>()
-        .invoke(e)))
