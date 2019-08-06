@@ -165,6 +165,10 @@ export let Wait = (ticks: number): Coroutine<Unit, Unit, Unit> => {
     }
 }
 
+// Delay is an alias for 'Wait'.
+export let Delay = (ticks: number): Coroutine<Unit, Unit, Unit> =>
+    Wait(ticks)
+
 // TEST COROUTINE INSPECTION CODE
 // let x = Wait(5)
 // var z = x
