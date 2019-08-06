@@ -171,26 +171,32 @@ export let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
     either.kind == "left" ? failWith(either.value) : unit_Coroutine(either.value)
 
 // Wait constructs a delay of the specified amount of ticks.
-export let Wait = (ticks: number): Coroutine<Unit, Unit, Unit> =>
-    ticks <= 0 ? unit_Coroutine({}) : bind_Coroutine<Unit, Unit, Unit, Unit>(Func(() => Wait(ticks - 1))).invoke(suspend())
+export let Wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
+    ticks <= 0 ? unit_Coroutine({}) : bind_Coroutine<S, Unit, Unit, Unit>(Func(() => Wait(ticks - 1))).invoke(suspend())
 
 // Delay is an alias for 'Wait'.
-export let Delay = (ticks: number): Coroutine<Unit, Unit, Unit> =>
+export let Delay = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
     Wait(ticks)
 
 // TEST COROUTINE INSPECTION CODE
-// let x = Wait(5)
+// let x = bind_Coroutine<number, Unit, Unit, string>(Func(() => compute(s => "test"))).invoke(Wait<number>(5))
 // var z = x
 // var i = 0
 // while (i < 10) {
-//     let result = z.invoke({})
+//     let result = z.invoke(1)
 //     if (result.kind == "left" && result.value.kind == "right") {
-//         z = result.value.value.snd
-//         console.log(z)
+//         let state = result.value.value.fst
+//         let continuation = result.value.value.snd
+//         console.log(state)
+//         console.log(continuation)
+//         z = continuation
+//     } else if (result.kind == "right") {
+//         console.log(result.value.fst)
+//         break
 //     } else {
 //         break
 //     }
-//
+
 //     i++
 // }
 
@@ -198,7 +204,6 @@ export let Delay = (ticks: number): Coroutine<Unit, Unit, Unit> =>
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
 export let RepeatUntil = <S, E, A>(p: (_: S) => boolean, process: Coroutine<S, E, A>): Coroutine<S, E, S> =>
     Func(state => {
-        // TODO invoke process recursively operating on the state of the last iteration
         let processState: Either<NoRes<S, E, A>, Pair<A, S>> = process.invoke(state)
 
         // Then check if the coroutine has a continuation, has failed or if it has a result.
