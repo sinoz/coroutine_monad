@@ -3,8 +3,22 @@ import { Unit, Func, identity } from "./func"
 import { Pair, map_Pair } from "./pair"
 import { Option } from "./option"
 
-// A `Coroutine` represents an effectful operation that can be suspended at
-// runtime without consuming resources, thus yielding cooperatively.
+// A `Coroutine` represents an effectful computation that can be suspended at
+// runtime without consuming resources (unlike an operating system thread, when
+// blocked it continues to make use of memory). When a `Coroutine` is suspended,
+// it allows other `Coroutine`s to take up CPU-time to perform (a little bit of)
+// work thus yielding cooperatively. A `Coroutine` may consist of multiple steps
+// of a computation. When one coroutine has finished a step, it can then suspend
+// itself and have the scheduler resume the computation later when needed.
+// This is especially important in application use cases such as games, where many
+// stateful computations are running at the same time and need control over how
+// and when a computation may be performed, in order to retain a healthy frame rate
+// at which things are processed. Threads cannot be used for this, as they are far
+// too heavyweight to be frequently constructed and destroyed. By introducing the
+// concept of coroutines, which are stackless and incredibly lightweight, computations
+// can be modeled as small steps in a simulation that a scheduler (which runs at the
+// edge of our world) can schedule to run on real operating system threads.
+//
 // When invoked, a Coroutine takes a State to perform the operation on, and
 // either returns a `NoRes`, which is an indicator of the Coroutine continuing
 // its computation or having failed, or, it returns a Pair with the result of
@@ -157,13 +171,8 @@ export let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
     either.kind == "left" ? failWith(either.value) : unit_Coroutine(either.value)
 
 // Wait constructs a delay of the specified amount of ticks.
-export let Wait = (ticks: number): Coroutine<Unit, Unit, Unit> => {
-    if (ticks <= 0) {
-        return unit_Coroutine({})
-    } else {
-        return bind_Coroutine<Unit, Unit, Unit, Unit>(Func(() => Wait(ticks - 1))).invoke(suspend())
-    }
-}
+export let Wait = (ticks: number): Coroutine<Unit, Unit, Unit> =>
+    ticks <= 0 ? unit_Coroutine({}) : bind_Coroutine<Unit, Unit, Unit, Unit>(Func(() => Wait(ticks - 1))).invoke(suspend())
 
 // Delay is an alias for 'Wait'.
 export let Delay = (ticks: number): Coroutine<Unit, Unit, Unit> =>
