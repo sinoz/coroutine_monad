@@ -156,6 +156,31 @@ export let fromOption = <S, A>(opt: Option<A>): Coroutine<S, Unit, A> =>
 export let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
     either.kind == "left" ? failWith(either.value) : unit_Coroutine(either.value)
 
+// Wait constructs a delay of the specified amount of ticks.
+export let Wait = (ticks: number): Coroutine<Unit, Unit, Unit> => {
+    if (ticks <= 0) {
+        return unit_Coroutine({})
+    } else {
+        return bind_Coroutine<Unit, Unit, Unit, Unit>(Func(() => Wait(ticks - 1))).invoke(suspend())
+    }
+}
+
+// TEST COROUTINE INSPECTION CODE
+// let x = Wait(5)
+// var z = x
+// var i = 0
+// while (i < 10) {
+//     let result = z.invoke({})
+//     if (result.kind == "left" && result.value.kind == "right") {
+//         z = result.value.value.snd
+//         console.log(z)
+//     } else {
+//         break
+//     }
+//
+//     i++
+// }
+
 // RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
 export let RepeatUntil = <S, E, A>(p: (_: S) => boolean, process: Coroutine<S, E, A>): Coroutine<S, E, S> =>
