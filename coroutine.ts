@@ -145,14 +145,25 @@ export let failWith = <S, E, A>(e: E): Coroutine<S, E, A> =>
 
 // effect lifts the effect of `f` into a Coroutine. Unlike the `compute` operator, this operator
 // does not operate on a state and can be used for effects such as  database calls, network / file IO, etc.
+// Exceptions thrown in the given computation are safely captured.
 export let effect = <E, A>(f: (_: Unit) => A): Coroutine<Unit, E, A> =>
     compute<Unit, E, A>(s => f({}))
 
 // transform lifts the specified transformation of `f`, from one instance of `S` to another instance of `S`.
+// Exceptions thrown in the given computation are safely captured.
 export let transform = <S, E>(f: (_: S) => S): Coroutine<S, E, S> =>
-    compute<S, E, S>(f)
+    Func(state => {
+        try {
+            let newState = f(state)
+            return right<NoRes<S, E, S>, Pair<S, S>>().invoke(Pair<S, S>(newState, newState))
+        } catch (e) {
+            return left<NoRes<S, E, S>, Pair<S, S>>().invoke(left<E, Continuation<S, E, S>>().invoke(e))
+        }
+    })
 
-// compute lifts the specified computation of `f` into a Coroutine.
+// compute lifts the specified computation of `f` into a Coroutine. Unlike the `transform` variant, this
+// operator only uses the State for reading purposes. New state cannot evolve during this computation.
+// Exceptions thrown in the given computation are safely captured.
 export let compute = <S, E, A>(f: (_: S) => A): Coroutine<S, E, A> =>
     Func(state => {
         try {
@@ -178,8 +189,43 @@ export let Wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
 export let Delay = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
     Wait(ticks)
 
+// RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
+// The execution is interrupted if an error was raised from the executed `process` coroutine.
+export let RepeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S>): Coroutine<S, E, S> =>
+    Func(state => {
+        if (p(state)) {
+            return unit_Coroutine<S, E, S>(state).invoke(state)
+        } else {
+            let processState: Either<NoRes<S, E, S>, Pair<S, S>> = process.invoke(state)
+
+            // Then check if the coroutine has a continuation, has failed or if it has a result.
+            if (processState.kind == "left") {
+                let failedOrContinuous: NoRes<S, E, S> = processState.value
+                
+                // Coroutine has a continuation or has failed. So now we have to check which one it is.
+                if (failedOrContinuous.kind == "left") {
+                    // Coroutine has failed to process a result.
+                    let errorValue = failedOrContinuous.value
+
+                    return failWith<S, E, S>(errorValue).invoke(state)
+                } else {
+                    // Coroutine has a continuation.
+                    let continuation = failedOrContinuous.value
+
+                    throw new Error("TODO")
+                }
+            } else { // The coroutine has successfully computed a result!
+                let happyPath = processState.value
+                let newState = happyPath.snd
+
+                return RepeatUntil<S, E>(p, process).invoke(newState)
+            }
+        }
+    })
+
 // TEST COROUTINE INSPECTION CODE
-// let x = bind_Coroutine<number, Unit, Unit, string>(Func(() => compute(s => "test"))).invoke(Wait<number>(5))
+// let x = RepeatUntil<number, Unit>(x => x >= 100, transform<number, number>(s => s * 2))
+// //bind_Coroutine<number, Unit, Unit, string>(Func(() => compute(s => "test"))).invoke(Wait<number>(5))
 // var z = x
 // var i = 0
 // while (i < 10) {
@@ -199,33 +245,3 @@ export let Delay = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
 
 //     i++
 // }
-
-// RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
-// The execution is interrupted if an error was raised from the executed `process` coroutine.
-export let RepeatUntil = <S, E, A>(p: (_: S) => boolean, process: Coroutine<S, E, A>): Coroutine<S, E, S> =>
-    Func(state => {
-        let processState: Either<NoRes<S, E, A>, Pair<A, S>> = process.invoke(state)
-
-        // Then check if the coroutine has a continuation, has failed or if it has a result.
-        if (processState.kind == "left") {
-            let failedOrContinuous: NoRes<S, E, A> = processState.value
-             
-            // Coroutine has a continuation or has failed. So now we have to check which one it is.
-            if (failedOrContinuous.kind == "left") {
-                // Coroutine has failed to process a result.
-                let errorValue = failedOrContinuous.value
-
-                throw new Error("TODO")
-            } else {
-                // Coroutine has a continuation.
-                let continuation = failedOrContinuous.value
-
-                throw new Error("TODO")
-            }
-        } else { // The coroutine has successfully computed a result!
-            let computedValue = processState.value
-            let newState = computedValue.snd
-
-            throw new Error("TODO")
-        }
-    })
