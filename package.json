@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "dependencies": {
+    "immutable": "^4.0.0-rc.12",
     "typescript": "^3.5.2"
   },
   "devDependencies": {},
