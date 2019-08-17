@@ -223,6 +223,10 @@ export let Race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1
 export let Concurrent = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Coroutine<S, E, Either<A, A1>> =>
     Race(fst, snd)
 
+// Any is an alias for `Race`.
+export let Any = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Coroutine<S, E, Either<A, A1>> =>
+    Race(fst, snd)
+
 // RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
 export let RepeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S>): Coroutine<S, E, S> =>
