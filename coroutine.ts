@@ -189,6 +189,40 @@ export let Wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
 export let Delay = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
     Wait(ticks)
 
+// `Race` lets two given `Coroutine`s race it out, returning the result of the first `Coroutine` that completes its course.
+// The execution is interrupted if an error was raised from either executed coroutines.
+export let Race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Coroutine<S, E, Either<A, A1>> =>
+    Func(state => {
+        let fstRes = fst.invoke(state)
+        let sndRes = snd.invoke(state)
+
+        if (fstRes.kind == "right" && sndRes.kind == "left") { // first one is done
+            return unit_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(fstRes.value.fst)).invoke(state)
+        } else if (fstRes.kind == "left" && sndRes.kind == "right") { // second one is done
+            return unit_Coroutine<S, E, Either<A, A1>>(right<A, A1>().invoke(sndRes.value.fst)).invoke(state)
+        } else if (fstRes.kind == "right" && sndRes.kind == "right") { // both are done
+            // emulating the behaviour of JavaScript's Promise.race(), return the first passed
+            // in Coroutine if both coroutines have completed their course.
+            return unit_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(fstRes.value.fst)).invoke(state)
+        } else if (fstRes.kind == "left" && sndRes.kind == "left") { // neither are done
+            if (fstRes.value.kind == "left") { // first Coroutine has failed.
+                return failWith<S, E, Either<A, A1>>(fstRes.value.value).invoke(state)
+            } else if (sndRes.value.kind == "left") { // second Coroutine has failed.
+                return failWith<S, E, Either<A, A1>>(sndRes.value.value).invoke(state)
+            } else if (fstRes.value.kind == "right" && sndRes.value.kind == "right") { // both Coroutines are suspended
+                return Race<S, E, A, A1>(fstRes.value.value.snd, sndRes.value.value.snd).invoke(state)
+            } else if (fstRes.value.kind == "right") { // only the first Coroutine is suspended
+                return Race<S, E, A, A1>(fstRes.value.value.snd, snd).invoke(state)
+            } else if (sndRes.value.kind == "right") { // only the second Coroutine is suspended
+                return Race<S, E, A, A1>(fst, sndRes.value.value.snd).invoke(state)
+            }
+        }
+    })
+
+// Concurrent is an alias for `Race`.
+export let Concurrent = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Coroutine<S, E, Either<A, A1>> =>
+    Race(fst, snd)
+
 // RepeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
 export let RepeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S>): Coroutine<S, E, S> =>
@@ -212,7 +246,7 @@ export let RepeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S
                     // Coroutine has a continuation.
                     let continuation = failedOrContinuous.value
 
-                    throw new Error("TODO")
+                    return continuation.snd.invoke(state) // TODO is this correct???
                 }
             } else { // The coroutine has successfully computed a result!
                 let happyPath = processState.value
@@ -222,26 +256,3 @@ export let RepeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S
             }
         }
     })
-
-// TEST COROUTINE INSPECTION CODE
-// let x = RepeatUntil<number, Unit>(x => x >= 100, transform<number, number>(s => s * 2))
-// //bind_Coroutine<number, Unit, Unit, string>(Func(() => compute(s => "test"))).invoke(Wait<number>(5))
-// var z = x
-// var i = 0
-// while (i < 10) {
-//     let result = z.invoke(1)
-//     if (result.kind == "left" && result.value.kind == "right") {
-//         let state = result.value.value.fst
-//         let continuation = result.value.value.snd
-//         console.log(state)
-//         console.log(continuation)
-//         z = continuation
-//     } else if (result.kind == "right") {
-//         console.log(result.value.fst)
-//         break
-//     } else {
-//         break
-//     }
-
-//     i++
-// }
