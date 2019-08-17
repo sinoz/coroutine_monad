@@ -2,6 +2,7 @@ import { Either, left, right } from "./either"
 import { Unit, Func, identity } from "./func"
 import { Pair, map_Pair } from "./pair"
 import { Option } from "./option"
+import { List } from "immutable"
 
 // A `Coroutine` represents an effectful computation that can be suspended at
 // runtime without consuming resources (unlike an operating system thread, when
@@ -180,6 +181,11 @@ export let fromOption = <S, A>(opt: Option<A>): Coroutine<S, Unit, A> =>
 // fromEither lifts the given `Either` type into a `Coroutine`.
 export let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
     either.kind == "left" ? failWith(either.value) : unit_Coroutine(either.value)
+
+// Replicates the given `Coroutine` the specified amount of times, returning a `List`
+// with the given `Coroutine`, 
+export let Replicate = <S, E, A>(count: number, c: Coroutine<S, E, A>): List<Coroutine<S, E, A>> =>
+    count <= 0 ? List.of() : List.of(c).concat(Replicate<S, E, A>(count - 1, c))
 
 // Wait constructs a delay of the specified amount of ticks.
 export let Wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
