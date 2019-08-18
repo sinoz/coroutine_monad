@@ -10,6 +10,8 @@ Supported operators:
 - completed
 - suspend
 - failWith
+- Sequence
+- ForEach
 - Replicate
 - Wait (Alias: Delay)
 - RepeatUntil

@@ -182,6 +182,34 @@ export let fromOption = <S, A>(opt: Option<A>): Coroutine<S, Unit, A> =>
 export let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
     either.kind == "left" ? failWith(either.value) : unit_Coroutine(either.value)
 
+// Sequences over the given `List` of `Coroutine`s, inverting the `List` into a `Coroutine`
+// that produces a `List` of values of `A`.
+export let Sequence = <S, E, A>(l: List<Coroutine<S, E, A>>): Coroutine<S, E, List<A>> =>
+    Func(state => { // TODO do this the purely functional way
+        let results = List.of<A>()
+        for (let coroutine of l.toArray()) {
+            let effectResult = coroutine.invoke(state)
+            if (effectResult.kind == "right") {
+                results.push(effectResult.value.fst)
+            } else {
+                let suspensionOrFail = effectResult.value
+                if (suspensionOrFail.kind == "left") {
+                    return failWith<S, E, List<A>>(suspensionOrFail.value).invoke(state)
+                } else { // TODO what to do when the Coroutine is suspended?
+                    throw new Error("TODO")
+                }
+            }
+        }
+
+        return unit_Coroutine<S, E, List<A>>(results).invoke(state)
+    })
+
+// Applies the given function of `f` for every element in the given `List` of `A`s, which is to
+// return a `Coroutine` that produces a `List` of values that the given function of `f` produces
+// for every element in the given `List`.
+export let ForEach = <S, E, A, A1>(l: List<A>) => (f: (_: A) => Coroutine<S, E, A1>): Coroutine<S, E, List<A1>> =>
+    Func(state => Sequence(l.map((v, k) => f(v))).invoke(state))
+
 // Replicates the given `Coroutine` the specified amount of times, returning a `List`
 // with the given `Coroutine`, 
 export let Replicate = <S, E, A>(count: number, c: Coroutine<S, E, A>): List<Coroutine<S, E, A>> =>
