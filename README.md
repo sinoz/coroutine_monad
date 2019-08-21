@@ -1,6 +1,6 @@
 # Coroutine Monad in TypeScript
 
-A purely functional implementation of the Coroutine monad in TypeScript, inspired by Haskell's monadic Coroutine and IO and Scala's Cats IO and ZIO implementations.
+A purely functional implementation of the Coroutine monad in TypeScript, inspired by Haskell's monadic [Coroutine](http://hackage.haskell.org/package/monad-coroutine-0.9.0.4/docs/Control-Monad-Coroutine.html) and [IO](https://wiki.haskell.org/IO_inside) and Scala's [Cats IO](https://typelevel.org/cats-effect/datatypes/io.html) and [ZIO](https://zio.dev/) implementations.
 
 ## How does it work?
 
@@ -112,4 +112,18 @@ Effects can also be raced:
 let programA = delay(3).bind(() => completed(1))
 let programB = delay(5).bind(() => completed(2))
 let program = programA.raceAgainst(programB)
+```
+
+## Interpretation
+
+In functional programming, the idea is to push all unsafe operations towards the edge of the world (such as your entry point). This way, the rest of your application can remain pure, referentially transparent and most important of all, composable. Now that you've learned how to build programs out of `Coroutine`s, you need to interpret them. This can be done by calling `resume` on your `Coroutine`, which will return either a suspension point or the final result of the `Coroutine`:
+
+```typescript
+let program: Coroutine<Unit, string, SomeValue> = fail("BOOM!")
+let result = program.resume({})
+if (result.kind == "left") {
+    // our program has failed.
+} else {
+    // our program has succeeded!
+}
 ```

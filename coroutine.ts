@@ -34,6 +34,10 @@ interface CoroutineOps<S, E, A> {
     bind: <B>(f: (_: A) => Coroutine<S, E, B>) => Coroutine<S, E, B>
     flatMap: <B>(f: (_: A) => Coroutine<S, E, B>) => Coroutine<S, E, B>
 
+    // TODO: resume currently throws an Error if the Coroutine has failed. Is this the right way?
+    // The idea is however, that resume is only called at the edge of our world.
+    resume: (s: S) => Either<Coroutine<S, E, A>, Pair<A, S>>
+
     repeatUntil: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, S>
     replicate: <S, E, A>(count: number) => List<Coroutine<S, E, A>>
 
@@ -74,6 +78,19 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
 
         flatMap: function<B>(this: Coroutine<S, E, A>, f: (_: A) => Coroutine<S, E, B>): Coroutine<S, E, B> {
             return this.bind(f)
+        },
+
+        resume: function(this: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> {
+            let result = this.invoke(s)
+            if (result.kind == "right") {
+                return right<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value)
+            } else {
+                if (result.value.kind == "left") {
+                    throw new Error("Coroutine failed with: " + result.value.value)
+                } else {
+                    return left<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value.value.snd)
+                }
+            }
         },
 
         repeatUntil: function<S, E>(this: Coroutine<S, E, S>, p: (_: S) => boolean): Coroutine<S, E, S> {
@@ -382,3 +399,6 @@ let repeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S>): Cor
             }
         }
     }))
+
+let x = completed<number, number>(1)
+console.log(x.resume(1))
