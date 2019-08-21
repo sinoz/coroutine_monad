@@ -198,7 +198,7 @@ let suspend = <S, E>(): Coroutine<S, E, Unit> =>
 
 // fail lifts an error value of `E`, into a `Coroutine` that has failed to produce a value,
 // thus returning the lifted value of `E`.
-let failWith = <S, E, A>(e: E): Coroutine<S, E, A> =>
+let fail = <S, E, A>(e: E): Coroutine<S, E, A> =>
     Coroutine(Func(state => left<NoRes<S, E, A>, Pair<A, S>>()
         .invoke(left<E, Continuation<S, E, A>>()
         .invoke(e))))
@@ -239,11 +239,11 @@ let putStrLn = <S, E>(text: string): Coroutine<S, E, void> =>
 
 // fromOption lifts the given `Option` type into a `Coroutine`.
 let fromOption = <S, A>(opt: Option<A>): Coroutine<S, Unit, A> =>
-    opt.kind == "none" ? failWith({}) : unit_Coroutine(opt.value)
+    opt.kind == "none" ? fail({}) : unit_Coroutine(opt.value)
 
 // fromEither lifts the given `Either` type into a `Coroutine`.
 let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
-    either.kind == "left" ? failWith(either.value) : unit_Coroutine(either.value)
+    either.kind == "left" ? fail(either.value) : unit_Coroutine(either.value)
 
 // Sequences over the given `List` of `Coroutine`s, inverting the `List` into a `Coroutine`
 // that produces a `List` of values of `A`.
@@ -257,7 +257,7 @@ let sequence = <S, E, A>(l: List<Coroutine<S, E, A>>): Coroutine<S, E, List<A>> 
             } else {
                 let suspensionOrFail = effectResult.value
                 if (suspensionOrFail.kind == "left") {
-                    return failWith<S, E, List<A>>(suspensionOrFail.value).invoke(state)
+                    return fail<S, E, List<A>>(suspensionOrFail.value).invoke(state)
                 } else { // TODO what to do when the Coroutine is suspended?
                     throw new Error("TODO")
                 }
@@ -305,12 +305,12 @@ let race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Cor
     Coroutine(Func(state => {
         let firstResult = fst.invoke(state)
         if (firstResult.kind == "left" && firstResult.value.kind == "left") { // first Coroutine has failed.
-            return failWith<S, E, Either<A, A1>>(firstResult.value.value).invoke(state)
+            return fail<S, E, Either<A, A1>>(firstResult.value.value).invoke(state)
         }
 
         let secondResult = snd.invoke(state)
         if (secondResult.kind == "left" && secondResult.value.kind == "left") { // second Coroutine has failed.
-            return failWith<S, E, Either<A, A1>>(secondResult.value.value).invoke(state)
+            return fail<S, E, Either<A, A1>>(secondResult.value.value).invoke(state)
         }
 
         // only the first one is done
@@ -367,7 +367,7 @@ let repeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S>): Cor
                     // Coroutine has failed to process a result.
                     let errorValue = failedOrContinuous.value
 
-                    return failWith<S, E, S>(errorValue).invoke(state)
+                    return fail<S, E, S>(errorValue).invoke(state)
                 } else {
                     // Coroutine has a continuation.
                     let continuation = failedOrContinuous.value

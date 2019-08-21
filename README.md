@@ -45,6 +45,27 @@ let program = locateToilet()
 
 The `flatMap` alias for `bind` is also provided.
 
+Should you already have a value, it can be lifted into a `Coroutine` through the `completed` operator:
+
+```typescript
+let program = completed({ id: 1, name: "John", surName: "Doe" })
+```
+
+Note however that invoking an unsafe function to produce a value to pass to the `Coroutine`, may cause undefined behaviour.
+
+Constructor support for `Option` and `Either` is also provided:
+
+```typescript
+let programA: Coroutine<MyState, Unit, number> = fromOption(Some(1))
+let programB: Coroutine<MyState, string, number> = fromEither(left().invoke("Failed!"))
+```
+
+A `Coroutine` can also be created in a failed state:
+
+```typescript
+let program = fail<Unit, string, number>("BOOM!!")
+```
+
 ## Repetition
 
 Coroutines can be repeated until a given state meets a specified predicate:
