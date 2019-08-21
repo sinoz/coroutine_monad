@@ -399,3 +399,6 @@ let repeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S>): Cor
             }
         }
     }))
+
+let x = completed<number, number>(1)
+console.log(x.resume(1))
