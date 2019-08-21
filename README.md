@@ -66,6 +66,15 @@ A `Coroutine` can also be created in a failed state:
 let program = fail<Unit, string, number>("BOOM!!")
 ```
 
+In some cases, you may want to apply an effect onto each element in a `List`. This is possible through `forEach`:
+
+```typescript
+let double = (n: number) => completed(n * 2)
+
+let values = List.of(1, 2, 3, 4)
+let program: Coroutine<Unit, Unit, List<number>> = forEach<Unit, Unit, number, number>(values)(number => double(number))
+```
+
 ## Repetition
 
 Coroutines can be repeated until a given state meets a specified predicate:
