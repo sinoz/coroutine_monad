@@ -122,8 +122,10 @@ In functional programming, the idea is to push all unsafe operations towards the
 let program: Coroutine<Unit, string, SomeValue> = fail("BOOM!")
 let result = program.resume({})
 if (result.kind == "left") {
-    // our program has failed.
+    // our program has reached a suspension point.
 } else {
     // our program has succeeded!
 }
 ```
+
+Note that errors of type `E` captured by the `Coroutine` are provided as part of a thrown `Error` within the error message when `resume` is called.
