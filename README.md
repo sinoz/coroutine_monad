@@ -26,16 +26,7 @@ The basic usage is to wrap your algorithm with the `effect`, `transform` or `com
 let program = compute<MyCounter, string, number>(s => s.count + 1)
 ```
 
-Alternative strategies are also supported, through the `orElse` operator:
-
-```typescript
-let getAccountFromDb = (id: AccountId): Coroutine<Unit, AccountError, Option<Account>> => throw new Error("TODO")
-let getAccountFromMemStore = (id: AccountId): Coroutine<Unit, AccountError, Option<Account>> => throw new Error("TODO")
-
-let program = getAccountFromMemStore(id).orElse(getAccountFromDb(id))
-```
-
-However, we do need a way to run effects in a sequence. This can be achieved through the `bind` operator:
+However, the reality is that programs are instructions that run one after another. So we need a way to run effects in a sequence. This can be achieved through the `bind` operator:
 
 ```typescript
 let program = locateToilet()
@@ -53,7 +44,7 @@ let program = completed({ id: 1, name: "John", surName: "Doe" })
 
 Note however that invoking an unsafe function to produce a value to pass to the `Coroutine`, may cause undefined behaviour.
 
-Constructor support for `Option` and `Either` is also provided:
+Constructor support for the `Option` and `Either` types is also provided:
 
 ```typescript
 let programA: Coroutine<MyState, Unit, number> = fromOption(Some(1))
@@ -73,6 +64,15 @@ let double = (n: number) => completed(n * 2)
 
 let values = List.of(1, 2, 3, 4)
 let program: Coroutine<Unit, Unit, List<number>> = forEach<Unit, Unit, number, number>(values)(number => double(number))
+```
+
+Alternative strategies are also supported, through the `orElse` operator:
+
+```typescript
+let getAccountFromDb = (id: AccountId): Coroutine<Unit, AccountError, Option<Account>> => throw new Error("TODO")
+let getAccountFromMemStore = (id: AccountId): Coroutine<Unit, AccountError, Option<Account>> => throw new Error("TODO")
+
+let program = getAccountFromMemStore(id).orElse(getAccountFromDb(id))
 ```
 
 ## Repetition
