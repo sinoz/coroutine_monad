@@ -59,16 +59,6 @@ An effect can also be replicated numerous times:
 let program: List<Coroutine<MyCounter, string, number>> = myEffect.replicate(10)
 ```
 
-## Delays
-
-Delays are also supported, which allow you to delay effects for a certain amount of time.
-
-```typescript
-let program = delay(5).bind(() => putStrLn("Hello World"))
-```
-
-The program described above, delays for five ticks and then prints `Hello World`. But how does this work? Does the library have its own scheduler? No, it does not. That is completely up to you. You decide when in time, the effect should resolve because, under the hood, the `delay` call does nothing but suspend N times.
-
 ## Interruptions
 
 Coroutines are built for cooperative interruptions, which are often labelled as suspensions, to allow CPU-intensive programs to consist of simulation steps that can be ran, interrupted and resumed later in time.
@@ -82,6 +72,16 @@ let program = putStrLn("First print!")
 ```
 
 The program described above when executed, first prints the 'First print!', suspends once and when resumed again, it is to print 'Second print!' and then suspends yet again and when finally resumed, it is to print 'Third print' which is to finish our program.
+
+## Delays
+
+Delays are also supported, which allow you to delay effects for a certain amount of time.
+
+```typescript
+let program = delay(5).bind(() => putStrLn("Hello World"))
+```
+
+The program described above, delays for five ticks and then prints `Hello World`. But how does this work? Does the library have its own scheduler? No, it does not. That is completely up to you. You decide when in time, the effect should resolve because, under the hood, the `delay` call does nothing but suspend N times.
 
 ## Concurrency
 
