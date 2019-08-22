@@ -316,7 +316,7 @@ let replicate = <S, E, A>(count: number, c: Coroutine<S, E, A>): List<Coroutine<
 
 // wait constructs a delay of the specified amount of ticks.
 let wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
-    ticks <= 0 ? succeed_Coroutine({}) : bind_Coroutine<S, Unit, Unit, Unit>(Func(() => wait(ticks - 1))).invoke(suspend())
+    ticks <= 0 ? succeed_Coroutine<S, Unit, Unit>({}) : suspend<S, Unit>().bind<Unit>(() => wait<S>(ticks - 1))
 
 // `race` lets two given `Coroutine`s race it out, returning the result of the first `Coroutine` that completes its course.
 // The execution is interrupted if an error was raised from either executed coroutines.
