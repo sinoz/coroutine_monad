@@ -133,11 +133,11 @@ let program = programA.raceAgainst(programB)
 
 ## Interpretation
 
-In functional programming, the idea is to push all unsafe operations towards the edge of the world (such as your entry point). This way, the rest of your application can remain pure, referentially transparent and most important of all, composable. Now that you've learned how to build programs out of `Coroutine`s, you need to interpret them. This can be done by calling `resume` on your `Coroutine`, which will return either a suspension point or the final result of the `Coroutine`:
+In functional programming, the idea is to push all unsafe operations towards the edge of the world (such as your entry point). This way, the rest of your application can remain pure, referentially transparent and most important of all, composable. Now that you've learned how to build programs out of `Coroutine`s, you need to interpret them. This can be done by calling `unsafeRun` on your `Coroutine`, which will return either a suspension point or the final result of the `Coroutine`:
 
 ```typescript
 let program: Coroutine<Unit, string, SomeValue> = fail("BOOM!")
-let result = program.resume({})
+let result = program.unsafeRun({}) // throws an error here and thus never reaches the condition below.
 if (result.kind == "left") {
     // our program has reached a suspension point.
 } else {
@@ -145,4 +145,4 @@ if (result.kind == "left") {
 }
 ```
 
-Note that errors of type `E` captured by the `Coroutine` are provided as part of a thrown `Error` within the error message when `resume` is called.
+Note that errors of type `E` captured by the `Coroutine` are provided as part of a thrown `Error` within the error message when `unsafeRun` is called.

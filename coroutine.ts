@@ -34,9 +34,7 @@ interface CoroutineOps<S, E, A> {
     bind: <B>(f: (_: A) => Coroutine<S, E, B>) => Coroutine<S, E, B>
     flatMap: <B>(f: (_: A) => Coroutine<S, E, B>) => Coroutine<S, E, B>
 
-    // TODO: resume currently throws an Error if the Coroutine has failed. Is this the right way?
-    // The idea is however, that resume is only called at the edge of our world.
-    resume: (s: S) => Either<Coroutine<S, E, A>, Pair<A, S>>
+    unsafeRun: (s: S) => Either<Coroutine<S, E, A>, Pair<A, S>>
 
     repeatUntil: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, S>
     replicate: <S, E, A>(count: number) => List<Coroutine<S, E, A>>
@@ -82,17 +80,8 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
             return this.bind(f)
         },
 
-        resume: function(this: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> {
-            let result = this.invoke(s)
-            if (result.kind == "right") {
-                return right<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value)
-            } else {
-                if (result.value.kind == "left") {
-                    throw new Error("Coroutine failed with: " + result.value.value)
-                } else {
-                    return left<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value.value.snd)
-                }
-            }
+        unsafeRun: function(this: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> {
+            return unsafeRun(this, s)
         },
 
         repeatUntil: function<S, E>(this: Coroutine<S, E, S>, p: (_: S) => boolean): Coroutine<S, E, S> {
@@ -314,13 +303,9 @@ let orElse = <S, E, A>(attempting: Coroutine<S, E, A>, alternative: Coroutine<S,
 let replicate = <S, E, A>(count: number, c: Coroutine<S, E, A>): List<Coroutine<S, E, A>> =>
     count <= 0 ? List.of() : List.of(c).concat(replicate<S, E, A>(count - 1, c))
 
-// Wait constructs a delay of the specified amount of ticks.
-let Wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
-    ticks <= 0 ? unit_Coroutine({}) : bind_Coroutine<S, Unit, Unit, Unit>(Func(() => Wait(ticks - 1))).invoke(suspend())
-
-// Delay is an alias for 'Wait'.
-let Delay = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
-    Wait(ticks)
+// wait constructs a delay of the specified amount of ticks.
+let wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
+    ticks <= 0 ? unit_Coroutine({}) : bind_Coroutine<S, Unit, Unit, Unit>(Func(() => wait(ticks - 1))).invoke(suspend())
 
 // `race` lets two given `Coroutine`s race it out, returning the result of the first `Coroutine` that completes its course.
 // The execution is interrupted if an error was raised from either executed coroutines.
@@ -405,3 +390,17 @@ let repeatUntil = <S, E>(p: (_: S) => boolean, procedure: Coroutine<S, E, S>): C
             }
         }
     }))
+
+// Unsafely invokes the given `Coroutine` with the given state of `S`. May throw an exception.
+let unsafeRun = <S, E, A>(coroutine: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> => {
+    let result = this.invoke(s)
+    if (result.kind == "right") {
+        return right<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value)
+    } else {
+        if (result.value.kind == "left") {
+            throw new Error("Coroutine failed with: " + result.value.value)
+        } else {
+            return left<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value.value.snd)
+        }
+    }
+}
