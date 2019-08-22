@@ -36,10 +36,10 @@ let program = locateToilet()
 
 The `flatMap` alias for `bind` is also provided.
 
-Should you already have a value, it can be lifted into a `Coroutine` through the `completed` operator:
+Should you already have a value, it can be lifted into a `Coroutine` through the `succeed` operator:
 
 ```typescript
-let program = completed({ id: 1, name: "John", surName: "Doe" })
+let program = succeed({ id: 1, name: "John", surName: "Doe" })
 ```
 
 Note however that invoking an unsafe function to produce a value to pass to the `Coroutine`, may cause undefined behaviour.
@@ -60,7 +60,7 @@ let program = fail<Unit, string, number>("BOOM!!")
 In some cases, you may want to apply an effect onto each element in a `List`. This is possible through `forEach`:
 
 ```typescript
-let double = (n: number) => completed(n * 2)
+let double = (n: number) => succeed(n * 2)
 
 let values = List.of(1, 2, 3, 4)
 let program: Coroutine<Unit, Unit, List<number>> = forEach<Unit, Unit, number, number>(values)(number => double(number))
@@ -126,8 +126,8 @@ The program described above, delays for five ticks and then prints `Hello World`
 Effects can also be raced:
 
 ```typescript
-let programA = delay(3).bind(() => completed(1))
-let programB = delay(5).bind(() => completed(2))
+let programA = delay(3).bind(() => succeed(1))
+let programB = delay(5).bind(() => succeed(2))
 let program = programA.raceAgainst(programB)
 ```
 

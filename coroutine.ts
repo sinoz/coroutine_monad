@@ -36,7 +36,9 @@ interface CoroutineOps<S, E, A> {
 
     unsafeRun: (s: S) => Either<Coroutine<S, E, A>, Pair<A, S>>
 
-    repeatUntil: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, S>
+    repeat: <S, E>(count: number) => Coroutine<S, E, Unit>
+    repeatUntil: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, Unit>
+
     replicate: <S, E, A>(count: number) => List<Coroutine<S, E, A>>
 
     raceAgainst: <S, E, A, A1>(competitor: Coroutine<S, E, A1>) => Coroutine<S, E, Either<A, A1>>
@@ -84,7 +86,11 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
             return unsafeRun(this, s)
         },
 
-        repeatUntil: function<S, E>(this: Coroutine<S, E, S>, p: (_: S) => boolean): Coroutine<S, E, S> {
+        repeat: function<S, E, A>(this: Coroutine<S, E, A>, count: number): Coroutine<S, E, Unit> {
+            return repeat(count, this)
+        },
+
+        repeatUntil: function<S, E, A>(this: Coroutine<S, E, A>, p: (_: S) => boolean): Coroutine<S, E, Unit> {
             return repeatUntil(p, this)
         },
 
@@ -97,7 +103,7 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
         },
 
         zip: function<A1>(this: Coroutine<S, E, A>, tail: Coroutine<S, E, A1>): Coroutine<S, E, Pair<A, A1>> {
-            return this.bind(a => tail.bind(a1 => unit_Coroutine(Pair(a, a1))))
+            return this.bind(a => tail.bind(a1 => succeed_Coroutine(Pair(a, a1))))
         },
 
         suspending: function<S, E>(this: Coroutine<S, E, A>): Coroutine<S, E, Unit> {
@@ -193,20 +199,20 @@ let join_Coroutine = <S, E, A>(): Func<Coroutine<S, E, Coroutine<S, E, A>>, Coro
 let bind_Coroutine = <S, E, A, B>(f: Func<A, Coroutine<S, E, B>>): Func<Coroutine<S, E, A>, Coroutine<S, E, B>> =>
     map_Coroutine<S, E, A, Coroutine<S, E, B>>(f).andThen(join_Coroutine())
 
-// unit_Coroutine eagerly lifts the input value of `A`, into a successfully completed `Coroutine`.
-let unit_Coroutine = <S, E, A>(a: A): Coroutine<S, E, A> =>
+// succeed_Coroutine eagerly lifts the input value of `A`, into a successfully completed `Coroutine`.
+let succeed_Coroutine = <S, E, A>(a: A): Coroutine<S, E, A> =>
     Coroutine(Func(state => right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(a, state))))
 
-// completed is an alias for `unit_Coroutine`. Do NOT pass in values (e.g through a function call)
+// succeed is an alias for `succeed_Coroutine`. Do NOT pass in values (e.g through a function call)
 // that can throw exceptions as this CAN cause undefined behaviour.
-let completed = <S, A>(a: A): Coroutine<S, Unit, A> =>
-    unit_Coroutine(a)
+let succeed = <S, E, A>(a: A): Coroutine<S, E, A> =>
+    succeed_Coroutine(a)
 
 // suspend returns a suspended `Coroutine` that does nothing until it is resumed.
 let suspend = <S, E>(): Coroutine<S, E, Unit> =>
     Coroutine(Func(state => left<NoRes<S, E, Unit>, Pair<Unit, S>>()
         .invoke(right<E, Continuation<S, E, Pair<Unit, S>>>()
-        .invoke({ fst: state, snd: unit_Coroutine<S, E, Pair<Unit, S>>(Pair({}, state))}))))
+        .invoke({ fst: state, snd: succeed_Coroutine<S, E, Pair<Unit, S>>(Pair({}, state))}))))
 
 // fail lifts an error value of `E`, into a `Coroutine` that has failed to produce a value,
 // thus returning the lifted value of `E`.
@@ -251,11 +257,11 @@ let putStrLn = <S, E>(text: string): Coroutine<S, E, void> =>
 
 // fromOption lifts the given `Option` type into a `Coroutine`.
 let fromOption = <S, A>(opt: Option<A>): Coroutine<S, Unit, A> =>
-    opt.kind == "none" ? fail({}) : unit_Coroutine(opt.value)
+    opt.kind == "none" ? fail({}) : succeed_Coroutine(opt.value)
 
 // fromEither lifts the given `Either` type into a `Coroutine`.
 let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
-    either.kind == "left" ? fail(either.value) : unit_Coroutine(either.value)
+    either.kind == "left" ? fail(either.value) : succeed_Coroutine(either.value)
 
 // Sequences over the given `List` of `Coroutine`s, inverting the `List` into a `Coroutine`
 // that produces a `List` of values of `A`.
@@ -276,7 +282,7 @@ let sequence = <S, E, A>(l: List<Coroutine<S, E, A>>): Coroutine<S, E, List<A>> 
             }
         }
 
-        return unit_Coroutine<S, E, List<A>>(results).invoke(state)
+        return succeed_Coroutine<S, E, List<A>>(results).invoke(state)
     }))
 
 // Applies the given function of `f` for every element in the given `List` of `A`s, which is to
@@ -305,7 +311,7 @@ let replicate = <S, E, A>(count: number, c: Coroutine<S, E, A>): List<Coroutine<
 
 // wait constructs a delay of the specified amount of ticks.
 let wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
-    ticks <= 0 ? unit_Coroutine({}) : bind_Coroutine<S, Unit, Unit, Unit>(Func(() => wait(ticks - 1))).invoke(suspend())
+    ticks <= 0 ? succeed_Coroutine({}) : bind_Coroutine<S, Unit, Unit, Unit>(Func(() => wait(ticks - 1))).invoke(suspend())
 
 // `race` lets two given `Coroutine`s race it out, returning the result of the first `Coroutine` that completes its course.
 // The execution is interrupted if an error was raised from either executed coroutines.
@@ -323,19 +329,19 @@ let race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Cor
 
         // only the first one is done
         if (firstResult.kind == "right" && secondResult.kind == "left") {
-            return unit_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(firstResult.value.fst)).invoke(state)
+            return succeed_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(firstResult.value.fst)).invoke(state)
         }
         
         // only the second one is done
         if (firstResult.kind == "left" && secondResult.kind == "right") {
-            return unit_Coroutine<S, E, Either<A, A1>>(right<A, A1>().invoke(secondResult.value.fst)).invoke(state)
+            return succeed_Coroutine<S, E, Either<A, A1>>(right<A, A1>().invoke(secondResult.value.fst)).invoke(state)
         }
         
         // both are done
         if (firstResult.kind == "right" && secondResult.kind == "right") {
             // emulating the behaviour of JavaScript's Promise.race(), return the first passed
             // in Coroutine if both coroutines have completed their course.
-            return unit_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(firstResult.value.fst)).invoke(state)
+            return succeed_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(firstResult.value.fst)).invoke(state)
         }
         
         // neither are done
@@ -357,43 +363,19 @@ let race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Cor
         }
     }))
 
+// Repeats the given procedure the specified amount of times, essentially producing a `Coroutine` that has
+// binded the given `Coroutine` procedure `count` times.
+let repeat = <S, E>(count: number, procedure: Coroutine<S, E, Unit>): Coroutine<S, E, Unit> =>
+    count <= 0 ? succeed_Coroutine({}) : procedure.bind(() => repeat(count - 1, procedure))
+
 // repeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
-let repeatUntil = <S, E>(p: (_: S) => boolean, procedure: Coroutine<S, E, S>): Coroutine<S, E, S> =>
-    Coroutine(Func(state => {
-        if (p(state)) {
-            return unit_Coroutine<S, E, S>(state).invoke(state)
-        } else {
-            let processState: Either<NoRes<S, E, S>, Pair<S, S>> = procedure.invoke(state)
-
-            // Then check if the coroutine has a continuation, has failed or if it has a result.
-            if (processState.kind == "left") {
-                let failedOrContinuous: NoRes<S, E, S> = processState.value
-                
-                // Coroutine has a continuation or has failed. So now we have to check which one it is.
-                if (failedOrContinuous.kind == "left") {
-                    // Coroutine has failed to process a result.
-                    let errorValue = failedOrContinuous.value
-
-                    return fail<S, E, S>(errorValue).invoke(state)
-                } else {
-                    // Coroutine has a continuation.
-                    let continuation = failedOrContinuous.value
-
-                    return continuation.snd.invoke(state)
-                }
-            } else { // The coroutine has successfully computed a result!
-                let happyPath = processState.value
-                let newState = happyPath.snd
-
-                return repeatUntil<S, E>(p, procedure).invoke(newState)
-            }
-        }
-    }))
+let repeatUntil = <S, E, A>(p: (_: S) => boolean, procedure: Coroutine<S, E, A>): Coroutine<S, E, Unit> =>
+    Coroutine(Func(state => (p(state) ? succeed<S, E, Unit>({}) : procedure.bind(() => repeatUntil(p, procedure))).invoke(state)))
 
 // Unsafely invokes the given `Coroutine` with the given state of `S`. May throw an exception.
 let unsafeRun = <S, E, A>(coroutine: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> => {
-    let result = this.invoke(s)
+    let result = coroutine.invoke(s)
     if (result.kind == "right") {
         return right<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value)
     } else {
