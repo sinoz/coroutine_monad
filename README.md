@@ -98,6 +98,8 @@ program.repeatUntil<MyCounter, string>(s => s.count >= 10)
 program.repeatWhile<MyCounter, string>(s => s.count < 10)
 ```
 
+`repeatUntil` and `repeatWhile` ignore the successful results of each repetition however. If you wish to get the result of each repetition, make use of `collectWhile` or `collectUntil`.
+
 An effect can also be replicated numerous times:
 
 ```typescript

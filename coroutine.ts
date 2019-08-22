@@ -14,17 +14,19 @@ import { List } from "immutable"
 // This is especially important in application use cases such as games, where many
 // stateful computations are running at the same time and need control over how
 // and when a computation may be performed. This allows applications to retain a
-// healthy frame rate. Threads cannot be used for this, as they are far too heavyweight
-// to be frequently constructed and destroyed. By introducing the concept of coroutines,
-// which are stackless and incredibly lightweight, computations can be modeled as small
-// steps in a simulation that a scheduler (which runs at the edge of our world) can schedule
-// to run on real operating system threads.
+// healthy frame rate. Threads are not suitable for this use case. They are far
+// far too heavyweight to be frequently constructed and destroyed. Therefore, by
+// introducing the concept of coroutines, which are stackless and lightweight,
+// computations can be modeled as small steps in a simulation that a scheduler
+// (which runs at the edge of our world) can schedule to run on real operating
+// system threads.
 
-// When invoked, a Coroutine takes a State to perform the operation on, and
-// either returns a `NoRes`, which is an indicator of the Coroutine continuing
-// its computation or having failed, or, it returns a Pair with the result of
-// `A` and the new state of `S`. When returned the Pair, it is to be assumed
-// that the Coroutine has completed its course.
+// The underlying and monadic definition of a coroutine. When invoked, a Coroutine
+// takes a State to perform the operation on, and either returns a `NoRes`, which
+// is an indicator of the Coroutine continuing its computation or having failed,
+// or, it returns a Pair with the result of `A` and the new state of `S`. When
+// returned the Pair, it is to be assumed that the Coroutine has completed its
+// course.
 type CoroutineM<S, E, A> = Func<S, Either<NoRes<S, E, A>, Pair<A, S>>>
 
 // The operations of the `Coroutine` that can be accessed as methods.
@@ -39,6 +41,9 @@ interface CoroutineOps<S, E, A> {
     repeat: <S, E>(count: number) => Coroutine<S, E, Unit>
     repeatWhile: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, Unit>
     repeatUntil: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, Unit>
+
+    collectWhile: <S, E, A>(p: (_: S) => boolean) => Coroutine<S, E, List<A>>
+    collectUntil: <S, E, A>(p: (_: S) => boolean) => Coroutine<S, E, List<A>>
 
     replicate: <S, E, A>(count: number) => List<Coroutine<S, E, A>>
 
@@ -61,8 +66,8 @@ export type Coroutine<S, E, A> = CoroutineM<S, E, A> & CoroutineOps<S, E, A>
 type NoRes<S, E, A> = Either<E, Continuation<S, E, A>>
 
 // `Continuation` is the symbolic representation of the rest of the monadic `Coroutine`
-// program. A `Continuation` is modeled as a `Pair` of `S` and  `Coroutine`, where `S` is
-// the current state in the computation and the `Coroutine` representing the remaining
+// program. A `Continuation` is modeled as a `Pair` of `S` and  `Coroutine`, where `S`
+// is the current state in the computation and the `Coroutine` representing the remaining
 // part of the computational program.
 interface Continuation<S, E, A> extends Pair<S, Coroutine<S, E, A>> { }
 
@@ -97,6 +102,14 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
 
         repeatUntil: function<S, E, A>(this: Coroutine<S, E, A>, p: (_: S) => boolean): Coroutine<S, E, Unit> {
             return repeatUntil(p, this)
+        },
+
+        collectWhile: function<S, E, A>(this: Coroutine<S, E, A>, p: (_: S) => boolean): Coroutine<S, E, List<A>> {
+            return collectWhile(p, this)
+        },
+
+        collectUntil: function<S, E, A>(this: Coroutine<S, E, A>, p: (_: S) => boolean): Coroutine<S, E, List<A>> {
+            return collectUntil(p, this)
         },
 
         replicate: function<S, E, A>(this: Coroutine<S, E, A>, count: number): List<Coroutine<S, E, A>> {
@@ -373,15 +386,31 @@ let race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Cor
 let repeat = <S, E>(count: number, procedure: Coroutine<S, E, Unit>): Coroutine<S, E, Unit> =>
     count <= 0 ? succeed_Coroutine({}) : procedure.bind(() => repeat(count - 1, procedure))
 
-// repeatWhile repeatedly executes the given `Coroutine` process as long as the given predicate of `p` is satisfied.
+// Repeatedly executes the given `Coroutine` process as long as the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
 let repeatWhile = <S, E, A>(p: (_: S) => boolean, procedure: Coroutine<S, E, A>): Coroutine<S, E, Unit> =>
     Coroutine(Func(state => (!p(state) ? succeed<S, E, Unit>({}) : procedure.bind(() => repeatWhile(p, procedure))).invoke(state)))
 
-// repeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
+// Repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
 let repeatUntil = <S, E, A>(p: (_: S) => boolean, procedure: Coroutine<S, E, A>): Coroutine<S, E, Unit> =>
     Coroutine(Func(state => (p(state) ? succeed<S, E, Unit>({}) : procedure.bind(() => repeatUntil(p, procedure))).invoke(state)))
+
+// Repeatedly executes the given `Coroutine` procedure, collecting each result as long as the given predicate
+// of `p` is satisfied. The execution is interrupted if an error was raised from the executed `process` coroutine.
+let collectWhile = <S, E, A>(p: (_: S) => boolean, procedure: Coroutine<S, E, A>): Coroutine<S, E, List<A>> =>
+    Coroutine(Func(state => (!p(state) ? succeed<S, E, List<A>>(List.of<A>()) : procedure
+        .bind(value => collectWhile<S, E, A>(p, procedure)
+        .map<S, E, List<A>, List<A>>(list => List.of(value).concat(list))))
+        .invoke(state)))
+
+// Repeatedly executes the given `Coroutine` procedure, collecting each result until the given predicate
+// of `p` is satisfied. The execution is interrupted if an error was raised from the executed `process` coroutine.
+let collectUntil = <S, E, A>(p: (_: S) => boolean, procedure: Coroutine<S, E, A>): Coroutine<S, E, List<A>> =>
+    Coroutine(Func(state => (p(state) ? succeed<S, E, List<A>>(List.of<A>()) : procedure
+        .bind(value => collectUntil<S, E, A>(p, procedure)
+        .map<S, E, List<A>, List<A>>(list => List.of(value).concat(list))))
+        .invoke(state)))
 
 // Unsafely invokes the given `Coroutine` with the given state of `S`. May throw an exception.
 let unsafeRun = <S, E, A>(coroutine: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> => {
