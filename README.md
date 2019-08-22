@@ -75,6 +75,14 @@ let getAccountFromMemStore = (id: AccountId): Coroutine<Unit, AccountError, Opti
 let program = getAccountFromMemStore(id).orElse(getAccountFromDb(id))
 ```
 
+You can also zip an effect with another, creating a `Coroutine` that produces a `Pair` of the two produced values.
+
+```typescript
+let program: Coroutine<State, string, Pair<ResultA, ResultB>> = programA.zip(programB)
+```
+
+The `zip` combinator, does operate sequentially however. The combined effect will return an error if either side fails.
+
 ## Repetition
 
 Coroutines can be repeated until a given state meets a specified predicate:

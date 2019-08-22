@@ -43,6 +43,8 @@ interface CoroutineOps<S, E, A> {
 
     raceAgainst: <S, E, A, A1>(competitor: Coroutine<S, E, A1>) => Coroutine<S, E, Either<A, A1>>
 
+    zip: <A1>(tail: Coroutine<S, E, A1>) => Coroutine<S, E, Pair<A, A1>>
+
     suspending: <S, E>() => Coroutine<S, E, Unit>
     unit: <S, E>() => Coroutine<S, E, Unit>
 
@@ -103,6 +105,10 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
 
         raceAgainst: function<S, E, A, A1>(this: Coroutine<S, E, A>, competitor: Coroutine<S, E, A1>): Coroutine<S, E, Either<A, A1>> {
             return race<S, E, A, A1>(this, competitor)
+        },
+
+        zip: function<A1>(this: Coroutine<S, E, A>, tail: Coroutine<S, E, A1>): Coroutine<S, E, Pair<A, A1>> {
+            return this.bind(a => tail.bind(a1 => unit_Coroutine(Pair(a, a1))))
         },
 
         suspending: function<S, E>(this: Coroutine<S, E, A>): Coroutine<S, E, Unit> {
@@ -368,12 +374,12 @@ let race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Cor
 
 // repeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
-let repeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S>): Coroutine<S, E, S> =>
+let repeatUntil = <S, E>(p: (_: S) => boolean, procedure: Coroutine<S, E, S>): Coroutine<S, E, S> =>
     Coroutine(Func(state => {
         if (p(state)) {
             return unit_Coroutine<S, E, S>(state).invoke(state)
         } else {
-            let processState: Either<NoRes<S, E, S>, Pair<S, S>> = process.invoke(state)
+            let processState: Either<NoRes<S, E, S>, Pair<S, S>> = procedure.invoke(state)
 
             // Then check if the coroutine has a continuation, has failed or if it has a result.
             if (processState.kind == "left") {
@@ -395,7 +401,7 @@ let repeatUntil = <S, E>(p: (_: S) => boolean, process: Coroutine<S, E, S>): Cor
                 let happyPath = processState.value
                 let newState = happyPath.snd
 
-                return repeatUntil<S, E>(p, process).invoke(newState)
+                return repeatUntil<S, E>(p, procedure).invoke(newState)
             }
         }
     }))
