@@ -376,7 +376,7 @@ let repeat = <S, E>(count: number, procedure: Coroutine<S, E, Unit>): Coroutine<
 // repeatWhile repeatedly executes the given `Coroutine` process as long as the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
 let repeatWhile = <S, E, A>(p: (_: S) => boolean, procedure: Coroutine<S, E, A>): Coroutine<S, E, Unit> =>
-    Coroutine(Func(state => (!p(state) ? succeed<S, E, Unit>({}) : procedure.bind(() => repeatUntil(p, procedure))).invoke(state)))
+    Coroutine(Func(state => (!p(state) ? succeed<S, E, Unit>({}) : procedure.bind(() => repeatWhile(p, procedure))).invoke(state)))
 
 // repeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
