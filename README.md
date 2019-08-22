@@ -85,10 +85,17 @@ The `zip` combinator, does operate sequentially however. The combined effect wil
 
 ## Repetition
 
-Coroutines can be repeated until a given state meets a specified predicate:
+Is as easy as:
+
+```typescript
+program.repeat(5)
+```
+
+Sometimes we don't know how many repetitions we need. So simply repeating an effect until a state satisfies (or does not satisfy) a predicate works as well:
 
 ```typescript
 program.repeatUntil<MyCounter, string>(s => s.count >= 10)
+program.repeatWhile<MyCounter, string>(s => s.count < 10)
 ```
 
 An effect can also be replicated numerous times:
@@ -131,9 +138,13 @@ let programB = delay(5).bind(() => succeed(2))
 let program = programA.raceAgainst(programB)
 ```
 
-## Interpretation
+## Combinating
 
-In functional programming, the idea is to push all unsafe operations towards the edge of the world (such as your entry point). This way, the rest of your application can remain pure, referentially transparent and most important of all, composable. Now that you've learned how to build programs out of `Coroutine`s, you need to interpret them. This can be done by calling `unsafeRun` on your `Coroutine`, which will return either a suspension point or the final result of the `Coroutine`:
+
+
+## Execution
+
+In functional programming, the idea is to push all unsafe operations towards the edge of the world (such as your entry point). This way, the rest of your application can remain pure, referentially transparent and most important of all, composable. Now that you've learned how to build programs out of `Coroutine`s, you need to execute them. This can be done by calling `unsafeRun` on your `Coroutine`, which will return either a suspension point or the final result of the `Coroutine`:
 
 ```typescript
 let program: Coroutine<Unit, string, SomeValue> = fail("BOOM!")

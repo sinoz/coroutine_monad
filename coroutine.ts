@@ -37,6 +37,7 @@ interface CoroutineOps<S, E, A> {
     unsafeRun: (s: S) => Either<Coroutine<S, E, A>, Pair<A, S>>
 
     repeat: <S, E>(count: number) => Coroutine<S, E, Unit>
+    repeatWhile: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, Unit>
     repeatUntil: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, Unit>
 
     replicate: <S, E, A>(count: number) => List<Coroutine<S, E, A>>
@@ -88,6 +89,10 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
 
         repeat: function<S, E, A>(this: Coroutine<S, E, A>, count: number): Coroutine<S, E, Unit> {
             return repeat(count, this)
+        },
+
+        repeatWhile: function<S, E, A>(this: Coroutine<S, E, A>, p: (_: S) => boolean): Coroutine<S, E, Unit> {
+            return repeatWhile(p, this)
         },
 
         repeatUntil: function<S, E, A>(this: Coroutine<S, E, A>, p: (_: S) => boolean): Coroutine<S, E, Unit> {
@@ -295,7 +300,7 @@ let forEach = <S, E, A, A1>(l: List<A>) => (f: (_: A) => Coroutine<S, E, A1>): C
 // has failed to produce a result. A failure is accepted as both an exception and any other kind of
 // error of `E`.
 let orElse = <S, E, A>(attempting: Coroutine<S, E, A>, alternative: Coroutine<S, E, A>): Coroutine<S, E, A> =>
-    Coroutine(Func(state => {
+    Coroutine(Func(state => { // TODO refactor
         let result = attempting.invoke(state)
         if (result.kind != "left" || result.value.kind == "right") {
             return result
@@ -367,6 +372,11 @@ let race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Cor
 // binded the given `Coroutine` procedure `count` times.
 let repeat = <S, E>(count: number, procedure: Coroutine<S, E, Unit>): Coroutine<S, E, Unit> =>
     count <= 0 ? succeed_Coroutine({}) : procedure.bind(() => repeat(count - 1, procedure))
+
+// repeatWhile repeatedly executes the given `Coroutine` process as long as the given predicate of `p` is satisfied.
+// The execution is interrupted if an error was raised from the executed `process` coroutine.
+let repeatWhile = <S, E, A>(p: (_: S) => boolean, procedure: Coroutine<S, E, A>): Coroutine<S, E, Unit> =>
+    Coroutine(Func(state => (!p(state) ? succeed<S, E, Unit>({}) : procedure.bind(() => repeatUntil(p, procedure))).invoke(state)))
 
 // repeatUntil repeatedly executes the given `Coroutine` process until the given predicate of `p` is satisfied.
 // The execution is interrupted if an error was raised from the executed `process` coroutine.
