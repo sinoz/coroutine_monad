@@ -125,24 +125,31 @@ The program described above when executed, first prints the 'First print!', susp
 Delays are also supported, which allow you to delay effects for a certain amount of time.
 
 ```typescript
-let program = delay(5).bind(() => putStrLn("Hello World"))
+let program = wait(5).bind(() => putStrLn("Hello World"))
 ```
 
-The program described above, delays for five ticks and then prints `Hello World`. But how does this work? Does the library have its own scheduler? No, it does not. That is completely up to you. You decide when in time, the effect should resolve because, under the hood, the `delay` call does nothing but suspend N times.
+The program described above, delays for five ticks and then prints `Hello World`. But how does this work? Does the library have its own scheduler? No, it does not. That is completely up to you. You decide when in time, the effect should resolve because, under the hood, the `wait` call does nothing but suspend N times.
 
 ## Concurrency
 
 Effects can also be raced:
 
 ```typescript
-let programA = delay(3).bind(() => succeed(1))
-let programB = delay(5).bind(() => succeed(2))
+let programA = wait(3).bind(() => succeed(1))
+let programB = wait(5).bind(() => succeed(2))
 let program = programA.raceAgainst(programB)
 ```
 
 ## Combinating
 
+All of the operators can be combined to create complex sequences of actions in a declarative fashion.
 
+```typescript
+let program = wait<Player>(5)
+    .bind(() => transform(plr => plr.damage(5).boost(MagicAccuracy)))
+    .bind(() => transform(plr => plr.message("The Staff of Doom has absorbed some of your lifepoints.")))
+    .repeatWhile(plr => plr.isWieldingItem(staffOfDoom))
+```
 
 ## Execution
 
