@@ -14,6 +14,7 @@ import {
   fromOption,
   fromEither
 } from "../src/coroutine"
+import { left, right } from "../src/either";
 
 describe('Coroutine constructors', function () {
   it('succeed', function () {
@@ -93,12 +94,22 @@ describe('Coroutine constructors', function () {
     expect(finalResult).equal(1)
   });
 
-  it('fromOption', function () {
-    expect(3 * 5).equal(15); // TODO
+  it('fromOptionNone', function () {
+    expect(() => fromOption(None()).unsafeRun({})).to.throw(Error)
   });
 
-  it('fromEither', function () {
-    expect(3 * 5).equal(15); // TODO
+  it('fromOptionSome', function () {
+    let result = fromOption(Some(1)).unsafeRunGetValue({})
+    expect(result.fst).equal(1);
+  });
+
+  it('fromEitherLeft', function () {
+    expect(() => fromEither(left().invoke("Error!")).unsafeRun({})).to.throw(Error)
+  });
+
+  it('fromEitherRight', function () {
+    let result = fromEither(right().invoke(1)).invoke({})
+    expect(result.kind).equal("right")
   });
 });
 
