@@ -354,17 +354,24 @@ let race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Cor
             } else if (firstResult.kind == "left" && secondResult.kind == "left") { // neither are done
                 // both Coroutines are suspended
                 if (firstResult.value.kind == "right" && secondResult.value.kind == "right") {
-                    return race<S, E, A, A1>(firstResult.value.value.snd, secondResult.value.value.snd).invoke(state)
+                    let x = firstResult.value.value.snd
+                    let y = secondResult.value.value.snd
+
+                    return suspend<S, E>().bind(() => race<S, E, A, A1>(x, y)).invoke(state)
                 }
                 
                 // only the first Coroutine is suspended
                 if (firstResult.value.kind == "right") {
-                    return race<S, E, A, A1>(firstResult.value.value.snd, snd).invoke(state)
+                    let x = firstResult.value.value.snd
+
+                    return suspend<S, E>().bind(() => race<S, E, A, A1>(x, snd)).invoke(state)
                 }
                 
                 // only the second Coroutine is suspended
                 if (secondResult.value.kind == "right") {
-                    return race<S, E, A, A1>(fst, secondResult.value.value.snd).invoke(state)
+                    let y = secondResult.value.value.snd
+                    
+                    return suspend<S, E>().bind(() => race<S, E, A, A1>(fst, y)).invoke(state)
                 }
             }
 

@@ -155,4 +155,26 @@ describe('Coroutine combinators', function () {
     expect(result.fst.fst).equal(64)
     expect(result.fst.snd).equal(true)
   });
+
+  it('raceAgainst', function () {
+    let programA = wait(5).bind(() => succeed("A"))
+    let programB = wait(3).bind(() => succeed("B"))
+
+    var program = programA.raceAgainst(programB)
+    for (let i = 0; i < 5; i++) {
+      let result = program.unsafeRun({})
+      if (result.kind == "left") {
+        program = result.value
+      } else if (result.kind == "right") {
+        let win = result.value.fst
+        if (win.kind == "left") {
+          expect(win.value).equal("A")
+        } else {
+          expect(win.value).equal("B")
+        }
+
+        break
+      }
+    }
+  });
 });
