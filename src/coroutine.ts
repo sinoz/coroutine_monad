@@ -229,8 +229,8 @@ let succeed = <S, E, A>(a: A): Coroutine<S, E, A> =>
 // suspend returns a suspended `Coroutine` that does nothing until it is resumed.
 let suspend = <S, E>(): Coroutine<S, E, Unit> =>
     Coroutine(Func(state => left<NoRes<S, E, Unit>, Pair<Unit, S>>()
-        .invoke(right<E, Continuation<S, E, Pair<Unit, S>>>()
-        .invoke({ fst: state, snd: succeed_Coroutine<S, E, Pair<Unit, S>>(Pair({}, state))}))))
+        .invoke(right<E, Continuation<S, E, Unit>>()
+        .invoke({ fst: state, snd: succeed_Coroutine<S, E, Unit>(({}))}))))
 
 // fail lifts an error value of `E`, into a `Coroutine` that has failed to produce a value,
 // thus returning the lifted value of `E`.
@@ -338,52 +338,42 @@ let race = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>): Cor
         let firstResult = fst.invoke(state)
         if (firstResult.kind == "left" && firstResult.value.kind == "left") { // first Coroutine has failed.
             return fail<S, E, Either<A, A1>>(firstResult.value.value).invoke(state)
-        }
+        } else {
+            let secondResult = snd.invoke(state)
+            if (secondResult.kind == "left" && secondResult.value.kind == "left") { // second Coroutine has failed.
+                return fail<S, E, Either<A, A1>>(secondResult.value.value).invoke(state)
+            } else if (firstResult.kind == "right" && secondResult.kind == "left") { // only the first one is done
+                return succeed_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(firstResult.value.fst)).invoke(state)
+            } else if (firstResult.kind == "left" && secondResult.kind == "right") { // only the second one is done
+                return succeed_Coroutine<S, E, Either<A, A1>>(right<A, A1>().invoke(secondResult.value.fst)).invoke(state)
+            } else if (firstResult.kind == "right" && secondResult.kind == "right") { // both are done
+                // emulating the behaviour of JavaScript's Promise.race(), return the first passed
+                // in Coroutine if both coroutines have completed their course.
+                return succeed_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(firstResult.value.fst)).invoke(state)
+            } else if (firstResult.kind == "left" && secondResult.kind == "left") { // neither are done
+                // both Coroutines are suspended
+                if (firstResult.value.kind == "right" && secondResult.value.kind == "right") {
+                    return race<S, E, A, A1>(firstResult.value.value.snd, secondResult.value.value.snd).invoke(state)
+                }
+                
+                // only the first Coroutine is suspended
+                if (firstResult.value.kind == "right") {
+                    return race<S, E, A, A1>(firstResult.value.value.snd, snd).invoke(state)
+                }
+                
+                // only the second Coroutine is suspended
+                if (secondResult.value.kind == "right") {
+                    return race<S, E, A, A1>(fst, secondResult.value.value.snd).invoke(state)
+                }
+            }
 
-        let secondResult = snd.invoke(state)
-        if (secondResult.kind == "left" && secondResult.value.kind == "left") { // second Coroutine has failed.
-            return fail<S, E, Either<A, A1>>(secondResult.value.value).invoke(state)
-        }
-
-        // only the first one is done
-        if (firstResult.kind == "right" && secondResult.kind == "left") {
-            return succeed_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(firstResult.value.fst)).invoke(state)
-        }
-        
-        // only the second one is done
-        if (firstResult.kind == "left" && secondResult.kind == "right") {
-            return succeed_Coroutine<S, E, Either<A, A1>>(right<A, A1>().invoke(secondResult.value.fst)).invoke(state)
-        }
-        
-        // both are done
-        if (firstResult.kind == "right" && secondResult.kind == "right") {
-            // emulating the behaviour of JavaScript's Promise.race(), return the first passed
-            // in Coroutine if both coroutines have completed their course.
-            return succeed_Coroutine<S, E, Either<A, A1>>(left<A, A1>().invoke(firstResult.value.fst)).invoke(state)
-        }
-        
-        // neither are done
-        if (firstResult.kind == "left" && secondResult.kind == "left") {
-            // both Coroutines are suspended
-            if (firstResult.value.kind == "right" && secondResult.value.kind == "right") {
-                return race<S, E, A, A1>(firstResult.value.value.snd, secondResult.value.value.snd).invoke(state)
-            }
-            
-            // only the first Coroutine is suspended
-            if (firstResult.value.kind == "right") {
-                return race<S, E, A, A1>(firstResult.value.value.snd, snd).invoke(state)
-            }
-            
-            // only the second Coroutine is suspended
-            if (secondResult.value.kind == "right") {
-                return race<S, E, A, A1>(fst, secondResult.value.value.snd).invoke(state)
-            }
+            throw new Error("UnsupportedOperation")
         }
     }))
 
 // Repeats the given procedure the specified amount of times, essentially producing a `Coroutine` that has
 // binded the given `Coroutine` procedure `count` times.
-let repeat = <S, E>(count: number, procedure: Coroutine<S, E, Unit>): Coroutine<S, E, Unit> =>
+let repeat = <S, E, A>(count: number, procedure: Coroutine<S, E, A>): Coroutine<S, E, Unit> =>
     count <= 0 ? succeed_Coroutine({}) : procedure.bind(() => repeat(count - 1, procedure))
 
 // Repeatedly executes the given `Coroutine` process as long as the given predicate of `p` is satisfied.
