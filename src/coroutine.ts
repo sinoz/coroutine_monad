@@ -37,6 +37,7 @@ interface CoroutineOps<S, E, A> {
     flatMap: <B>(f: (_: A) => Coroutine<S, E, B>) => Coroutine<S, E, B>
 
     unsafeRun: (s: S) => Either<Coroutine<S, E, A>, Pair<A, S>>
+    unsafeRunGetValue: (s: S) => Pair<A, S>
 
     repeat: <S, E>(count: number) => Coroutine<S, E, Unit>
     repeatWhile: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, Unit>
@@ -90,6 +91,10 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
 
         unsafeRun: function(this: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> {
             return unsafeRun(this, s)
+        },
+
+        unsafeRunGetValue: function(this: Coroutine<S, E, A>, s: S): Pair<A, S> {
+            return unsafeRunGetValue(this, s)
         },
 
         repeat: function<S, E, A>(this: Coroutine<S, E, A>, count: number): Coroutine<S, E, Unit> {
@@ -219,18 +224,18 @@ let bind_Coroutine = <S, E, A, B>(f: Func<A, Coroutine<S, E, B>>): Func<Coroutin
 
 // succeed eagerly lifts the input value of `A`, into a successfully completed `Coroutine`. Do NOT pass
 // in values (e.g through a function call) that can throw exceptions as this CAN cause undefined behaviour.
-let succeed = <S, E, A>(a: A): Coroutine<S, E, A> =>
+export let succeed = <S, E, A>(a: A): Coroutine<S, E, A> =>
     Coroutine(Func(state => right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(a, state))))
 
 // suspend returns a suspended `Coroutine` that does nothing until it is resumed.
-let suspend = <S, E>(): Coroutine<S, E, Unit> =>
+export let suspend = <S, E>(): Coroutine<S, E, Unit> =>
     Coroutine(Func(state => left<NoRes<S, E, Unit>, Pair<Unit, S>>()
         .invoke(right<E, Continuation<S, E, Unit>>()
         .invoke({ fst: state, snd: succeed<S, E, Unit>(({}))}))))
 
 // fail lifts an error value of `E`, into a `Coroutine` that has failed to produce a value,
 // thus returning the lifted value of `E`.
-let fail = <S, E, A>(e: E): Coroutine<S, E, A> =>
+export let fail = <S, E, A>(e: E): Coroutine<S, E, A> =>
     Coroutine(Func(state => left<NoRes<S, E, A>, Pair<A, S>>()
         .invoke(left<E, Continuation<S, E, A>>()
         .invoke(e))))
@@ -238,12 +243,12 @@ let fail = <S, E, A>(e: E): Coroutine<S, E, A> =>
 // effect lifts the effect of `f` into a Coroutine. Unlike the `compute` operator, this operator
 // does not operate on a state and can be used for effects such as  database calls, network / file IO, etc.
 // Exceptions thrown in the given computation are safely captured.
-let effect = <E, A>(f: (_: Unit) => A): Coroutine<Unit, E, A> =>
+export let effect = <E, A>(f: (_: Unit) => A): Coroutine<Unit, E, A> =>
     compute<Unit, E, A>(s => f({}))
 
 // transform lifts the specified transformation of `f`, from one instance of `S` to another instance of `S`.
 // Exceptions thrown in the given computation are safely captured.
-let transform = <S, E>(f: (_: S) => S): Coroutine<S, E, S> =>
+export let transform = <S, E>(f: (_: S) => S): Coroutine<S, E, S> =>
     Coroutine(Func(state => {
         try {
             let newState = f(state)
@@ -256,7 +261,7 @@ let transform = <S, E>(f: (_: S) => S): Coroutine<S, E, S> =>
 // compute lifts the specified computation of `f` into a Coroutine. Unlike the `transform` variant, this
 // operator only uses the State for reading purposes. New state cannot evolve during this computation.
 // Exceptions thrown in the given computation are safely captured.
-let compute = <S, E, A>(f: (_: S) => A): Coroutine<S, E, A> =>
+export let compute = <S, E, A>(f: (_: S) => A): Coroutine<S, E, A> =>
     Coroutine(Func(state => {
         try {
             return right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(f(state), state))
@@ -266,15 +271,15 @@ let compute = <S, E, A>(f: (_: S) => A): Coroutine<S, E, A> =>
     }))
 
 // Puts the given text line into the console.
-let putStrLn = <S, E>(text: string): Coroutine<S, E, void> =>
+export let putStrLn = <S, E>(text: string): Coroutine<S, E, void> =>
     compute<S, E, void>(state => console.log(text))
 
 // fromOption lifts the given `Option` type into a `Coroutine`.
-let fromOption = <S, A>(opt: Option<A>): Coroutine<S, Unit, A> =>
+export let fromOption = <S, A>(opt: Option<A>): Coroutine<S, Unit, A> =>
     opt.kind == "none" ? fail({}) : succeed(opt.value)
 
 // fromEither lifts the given `Either` type into a `Coroutine`.
-let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
+export let fromEither = <S, E, A>(either: Either<E, A>): Coroutine<S, E, A> =>
     either.kind == "left" ? fail(either.value) : succeed(either.value)
 
 // Sequences over the given `List` of `Coroutine`s, inverting the `List` into a `Coroutine`
@@ -409,5 +414,16 @@ let unsafeRun = <S, E, A>(coroutine: Coroutine<S, E, A>, s: S): Either<Coroutine
         } else {
             return left<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value.value.snd)
         }
+    }
+}
+
+// Unsafely invokes the given `Coroutine` with the given state of `S`. Unlike the regular `unsafeRun`, this
+// operation will try its best to obtain the produced value from `Coroutine`. Will throw an exception otherwise.
+let unsafeRunGetValue = <S, E, A>(coroutine: Coroutine<S, E, A>, s: S): Pair<A, S> => {
+    let result = coroutine.unsafeRun(s)
+    if (result.kind == "left") {
+        throw new Error("")
+    } else {
+        return result.value
     }
 }
