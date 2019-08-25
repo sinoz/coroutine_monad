@@ -1,6 +1,7 @@
 import { expect } from "chai"
 import { describe, it } from "mocha"
 import { Some, None } from "../src/option"
+import { Unit } from "../src/func"
 import {
   Coroutine,
   succeed,
@@ -156,9 +157,19 @@ describe('Coroutine combinators', function () {
     expect(result.fst.snd).equal(true)
   });
 
+  it('orElse', function () {
+    let programA = effect<string, number>(() => { throw new Error() })
+    let programB = effect<string, number>(() => 72)
+
+    let withAlternative = programA.orElse(programB)
+    let result = withAlternative.unsafeRunGetValue({})
+    
+    expect(result.fst).equal(72)
+  });
+
   it('raceAgainst', function () {
-    let programA = wait(5).bind(() => succeed("A"))
-    let programB = wait(3).bind(() => succeed("B"))
+    let programA = wait<Unit>(5).bind(() => succeed("A"))
+    let programB = wait<Unit>(3).bind(() => succeed("B"))
 
     var program = programA.raceAgainst(programB)
     for (let i = 0; i < 5; i++) {
