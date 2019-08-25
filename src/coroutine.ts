@@ -217,7 +217,7 @@ let join_Coroutine = <S, E, A>(): Func<Coroutine<S, E, Coroutine<S, E, A>>, Coro
 let bind_Coroutine = <S, E, A, B>(f: Func<A, Coroutine<S, E, B>>): Func<Coroutine<S, E, A>, Coroutine<S, E, B>> =>
     map_Coroutine<S, E, A, Coroutine<S, E, B>>(f).andThen(join_Coroutine())
 
-// succeed_Coroutine eagerly lifts the input value of `A`, into a successfully completed `Coroutine`. Do NOT pass
+// succeed eagerly lifts the input value of `A`, into a successfully completed `Coroutine`. Do NOT pass
 // in values (e.g through a function call) that can throw exceptions as this CAN cause undefined behaviour.
 let succeed = <S, E, A>(a: A): Coroutine<S, E, A> =>
     Coroutine(Func(state => right<NoRes<S, E, A>, Pair<A, S>>().invoke(Pair<A, S>(a, state))))
