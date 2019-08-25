@@ -1,5 +1,7 @@
 {
     "compilerOptions": {
+        "outDir": "./build",                        /* Redirect output structure to the directory. */
+        "strict": true,                           /* Enable all strict type-checking options. */
         "module": "commonjs"
     },
     "exclude": [
