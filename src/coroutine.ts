@@ -329,7 +329,7 @@ let replicate = <S, E, A>(count: number, c: Coroutine<S, E, A>): List<Coroutine<
     count <= 0 ? List.of() : List.of(c).concat(replicate<S, E, A>(count - 1, c))
 
 // wait constructs a delay of the specified amount of ticks.
-let wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
+export let wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
     ticks <= 0 ? succeed<S, Unit, Unit>({}) : suspend<S, Unit>().bind<Unit>(() => wait<S>(ticks - 1))
 
 // `race` lets two given `Coroutine`s race it out, returning the result of the first `Coroutine` that completes its course.
