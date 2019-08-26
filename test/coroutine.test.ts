@@ -2,6 +2,7 @@ import { expect } from "chai"
 import { describe, it } from "mocha"
 import { Some, None } from "../src/option"
 import { Unit } from "../src/func"
+import { unsafeRun, unsafeRunGetValue } from "../src/runtime"
 import {
   Coroutine,
   succeed,
@@ -18,12 +19,12 @@ import { left, right } from "../src/either";
 
 describe('Coroutine constructors', function () {
   it('succeed', function () {
-    let result = succeed<number, never, number>(10).unsafeRunGetValue(1)
+    let result = unsafeRunGetValue(succeed<number, never, number>(10), 1)
     expect(result.fst).equal(10);
   });
 
   it('suspend', function () {
-    let result = suspend<number, string>().unsafeRun(1)
+    let result = unsafeRun(suspend<number, string>(), 1)
 
     // `unsafeRun` throws an exception if the `Coroutine` had failed so merely checking
     // if the kind of result is 'left', will suffice.
@@ -31,40 +32,40 @@ describe('Coroutine constructors', function () {
   });
 
   it('fail', function () {
-    expect(() => fail<number, string, boolean>("Error!").unsafeRun(1)).to.throw(Error);
+    expect(() => unsafeRun(fail<number, string, boolean>("Error!"), 1)).to.throw(Error);
   });
 
   it('effect', function () {
-    let result = effect<never, string>(() => "y").unsafeRunGetValue({})
+    let result = unsafeRunGetValue(effect<never, string>(() => "y"), {})
     expect(result.fst).equal("y");
   });
 
   it('effectError', function () {
-    expect(() => effect<Error, boolean>(s => { throw new Error() }).unsafeRun(({}))).to.throw(Error);
+    expect(() => unsafeRun(effect<Error, boolean>(s => { throw new Error() }), ({}))).to.throw(Error);
   });
 
   it('transform', function () {
-    let result = transform<string, never>(s => s + "y").unsafeRunGetValue("x")
+    let result = unsafeRunGetValue(transform<string, never>(s => s + "y"), "x")
     expect(result.fst).equal("xy");
   });
 
   it('transformError', function () {
-    expect(() => transform<number, Error>(s => { throw new Error() }).unsafeRun(1)).to.throw(Error);
+    expect(() => unsafeRun(transform<number, Error>(s => { throw new Error() }), 1)).to.throw(Error);
   });
 
   it('compute', function () {
-    let result = compute<number, never, number>(s => s + 1).unsafeRunGetValue(1)
+    let result = unsafeRunGetValue(compute<number, never, number>(s => s + 1), 1)
     expect(result.fst).equal(2);
   });
 
   it('computeError', function () {
-    expect(() => compute<number, Error, number>(s => { throw new Error() }).unsafeRun(1)).to.throw(Error);
+    expect(() => unsafeRun(compute<number, Error, number>(s => { throw new Error() }), 1)).to.throw(Error);
   });
 
   it('wait', function () {
     var program = wait(5)
     for (let i = 0; i < 5; i++) {
-      let result = program.unsafeRun({})
+      let result = unsafeRun(program, {})
 
       expect(result.kind).equal("left")
       if (result.kind == "left") {
@@ -77,7 +78,7 @@ describe('Coroutine constructors', function () {
     var program = wait(10).bind(() => succeed(1))
     var finalResult = 0
     for (let i = 0; i < 11; i++) {
-      let result = program.unsafeRun({})
+      let result = unsafeRun(program, {})
       if (i <= 9) {
         expect(result.kind).equal("left")
       } else {
@@ -95,16 +96,16 @@ describe('Coroutine constructors', function () {
   });
 
   it('fromOptionNone', function () {
-    expect(() => fromOption(None()).unsafeRun({})).to.throw(Error)
+    expect(() => unsafeRun(fromOption(None()), {})).to.throw(Error)
   });
 
   it('fromOptionSome', function () {
-    let result = fromOption(Some(1)).unsafeRunGetValue({})
+    let result = unsafeRunGetValue(fromOption(Some(1)), {})
     expect(result.fst).equal(1);
   });
 
   it('fromEitherLeft', function () {
-    expect(() => fromEither(left().invoke("Error!")).unsafeRun({})).to.throw(Error)
+    expect(() => unsafeRun(fromEither(left().invoke("Error!")), {})).to.throw(Error)
   });
 
   it('fromEitherRight', function () {
@@ -118,7 +119,7 @@ describe('Coroutine combinators', function () {
     var numericVar = 0
     let repetition = effect<never, void>(() => { numericVar++ }).repeat(10)
 
-    repetition.unsafeRun({})
+    unsafeRun(repetition, {})
     expect(numericVar).equal(10)
   });
 
@@ -126,7 +127,7 @@ describe('Coroutine combinators', function () {
     var numericVar = 0
     let repetition = effect<never, void>(() => { numericVar++ }).repeatUntil(() => numericVar >= 16)
 
-    repetition.unsafeRun({})
+    unsafeRun(repetition, {})
     expect(numericVar).equal(16)
   });
 
@@ -134,13 +135,13 @@ describe('Coroutine combinators', function () {
     var numericVar = 0
     let repetition = effect<never, void>(() => { numericVar++ }).repeatWhile(() => numericVar <= 16)
 
-    repetition.unsafeRun({})
+    unsafeRun(repetition, {})
     expect(numericVar).equal(17)
   });
 
   it('collectUntil', function () {
     let repetition = transform<number, never>(s => s + 1).collectUntil<number, never, number>(s => s >= 16)
-    let result = repetition.unsafeRunGetValue(0)
+    let result = unsafeRunGetValue(repetition, 0)
 
     let allNumbers = result.fst.toArray()
     for (let i = 1; i <= 16; i++) {
@@ -150,7 +151,7 @@ describe('Coroutine combinators', function () {
 
   it('collectWhile', function () {
     let repetition = transform<number, never>(s => s + 1).collectWhile<number, never, number>(s => s <= 32)
-    let result = repetition.unsafeRunGetValue(0)
+    let result = unsafeRunGetValue(repetition, 0)
 
     let allNumbers = result.fst.toArray()
     for (let i = 1; i <= 32; i++) {
@@ -162,7 +163,7 @@ describe('Coroutine combinators', function () {
     let programA = effect<string, number>(() => 64)
     let programB = effect<string, boolean>(() => true)
     let combined = programA.zip(programB)
-    let result = combined.unsafeRunGetValue({})
+    let result = unsafeRunGetValue(combined, {})
     
     expect(result.fst.fst).equal(64)
     expect(result.fst.snd).equal(true)
@@ -173,7 +174,7 @@ describe('Coroutine combinators', function () {
     let programB = effect<string, number>(() => 72)
 
     let withAlternative = programA.orElse(programB)
-    let result = withAlternative.unsafeRunGetValue({})
+    let result = unsafeRunGetValue(withAlternative, {})
     
     expect(result.fst).equal(72)
   });
@@ -184,7 +185,7 @@ describe('Coroutine combinators', function () {
 
     var program = programA.raceAgainst(programB)
     for (let i = 0; i < 5; i++) {
-      let result = program.unsafeRun({})
+      let result = unsafeRun(program, {})
       if (result.kind == "left") {
         program = result.value
       } else if (result.kind == "right") {

@@ -36,9 +36,6 @@ interface CoroutineOps<S, E, A> {
     bind: <B>(f: (_: A) => Coroutine<S, E, B>) => Coroutine<S, E, B>
     flatMap: <B>(f: (_: A) => Coroutine<S, E, B>) => Coroutine<S, E, B>
 
-    unsafeRun: (s: S) => Either<Coroutine<S, E, A>, Pair<A, S>>
-    unsafeRunGetValue: (s: S) => Pair<A, S>
-
     repeat: <S, E>(count: number) => Coroutine<S, E, Unit>
     repeatWhile: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, Unit>
     repeatUntil: <S, E>(p: (_: S) => boolean) => Coroutine<S, E, Unit>
@@ -87,14 +84,6 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
 
         flatMap: function<B>(this: Coroutine<S, E, A>, f: (_: A) => Coroutine<S, E, B>): Coroutine<S, E, B> {
             return this.bind(f)
-        },
-
-        unsafeRun: function(this: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> {
-            return unsafeRun(this, s)
-        },
-
-        unsafeRunGetValue: function(this: Coroutine<S, E, A>, s: S): Pair<A, S> {
-            return unsafeRunGetValue(this, s)
         },
 
         repeat: function<S, E, A>(this: Coroutine<S, E, A>, count: number): Coroutine<S, E, Unit> {
@@ -409,28 +398,3 @@ let collectUntil = <S, E, A>(p: (_: S) => boolean, procedure: Coroutine<S, E, A>
         .bind(value => collectUntil<S, E, A>(p, procedure)
         .map<S, E, List<A>, List<A>>(list => List.of(value).concat(list))))
         .invoke(state)))
-
-// Unsafely invokes the given `Coroutine` with the given state of `S`. May throw an exception.
-let unsafeRun = <S, E, A>(coroutine: Coroutine<S, E, A>, s: S): Either<Coroutine<S, E, A>, Pair<A, S>> => {
-    let result = coroutine.invoke(s)
-    if (result.kind == "right") {
-        return right<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value)
-    } else {
-        if (result.value.kind == "left") {
-            throw new Error("Coroutine failed with: " + result.value.value)
-        } else {
-            return left<Coroutine<S, E, A>, Pair<A, S>>().invoke(result.value.value.snd)
-        }
-    }
-}
-
-// Unsafely invokes the given `Coroutine` with the given state of `S`. Unlike the regular `unsafeRun`, this
-// operation will try its best to obtain the produced value from `Coroutine`. Will throw an exception otherwise.
-let unsafeRunGetValue = <S, E, A>(coroutine: Coroutine<S, E, A>, s: S): Pair<A, S> => {
-    let result = coroutine.unsafeRun(s)
-    if (result.kind == "left") {
-        throw new Error("")
-    } else {
-        return result.value
-    }
-}

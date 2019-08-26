@@ -153,11 +153,11 @@ let program = wait<Player>(5)
 
 ## Execution
 
-In functional programming, the idea is to push all unsafe operations towards the edge of the world (such as your entry point). This way, the rest of your application can remain pure, referentially transparent and most important of all, composable. Now that you've learned how to build programs out of `Coroutine`s, you need to execute them. This can be done by calling `unsafeRun` on your `Coroutine`, which will return either a suspension point or the final result of the `Coroutine`:
+In functional programming, the idea is to push all unsafe operations towards the edge of the world (such as your entry point). This way, the rest of your application can remain pure, referentially transparent and most important of all, composable. Now that you've learned how to build programs out of `Coroutine`s, you need to execute them. This can be done by calling `unsafeRun` with the `Coroutine` you wish to invoke, which will return either a suspension point or the final result of the `Coroutine`:
 
 ```typescript
 let program: Coroutine<Unit, string, SomeValue> = fail("BOOM!")
-let result = program.unsafeRun({}) // throws an error here and thus never reaches the condition below.
+let result = unsafeRun(program, {}) // throws an error here and thus never reaches the condition below.
 if (result.kind == "left") {
     // our program has reached a suspension point.
 } else {
