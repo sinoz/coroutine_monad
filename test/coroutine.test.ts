@@ -200,4 +200,24 @@ describe('Coroutine combinators', function () {
       }
     }
   });
+
+  it('inParallelWith', function () {
+    let programA = wait<Unit>(5).bind(() => succeed("A"))
+    let programB = wait<Unit>(3).bind(() => succeed("B"))
+
+    var program = programA.inParallelWith(programB)
+    for (let i = 0; i < 8; i++) {
+      let result = unsafeRun(program, {})
+      if (result.kind == "left") {
+        program = result.value
+      } else if (result.kind == "right") {
+        let win = result.value.fst
+  
+        expect(win.fst).equal("A")
+        expect(win.snd).equal("B")
+
+        break
+      }
+    }
+  });
 });

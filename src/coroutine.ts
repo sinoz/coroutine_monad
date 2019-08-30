@@ -1,7 +1,7 @@
 import { Either, left, right } from "./either"
 import { Unit, Func, identity } from "./func"
 import { Pair, map_Pair } from "./pair"
-import { Option } from "./option"
+import { Option, Some, None } from "./option"
 import { List } from "immutable"
 
 // A `Coroutine` represents an effectful computation that can be suspended at
@@ -46,6 +46,7 @@ interface CoroutineOps<S, E, A> {
     replicate: <S, E, A>(count: number) => List<Coroutine<S, E, A>>
 
     raceAgainst: <S, E, A, A1>(competitor: Coroutine<S, E, A1>) => Coroutine<S, E, Either<A, A1>>
+    inParallelWith: <S, E, A, A1>(companion: Coroutine<S, E, A1>) => Coroutine<S, E, Pair<A, A1>>
 
     zip: <A1>(tail: Coroutine<S, E, A1>) => Coroutine<S, E, Pair<A, A1>>
 
@@ -112,6 +113,10 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
 
         raceAgainst: function<S, E, A, A1>(this: Coroutine<S, E, A>, competitor: Coroutine<S, E, A1>): Coroutine<S, E, Either<A, A1>> {
             return race<S, E, A, A1>(this, competitor)
+        },
+
+        inParallelWith: function<S, E, A, A1>(this: Coroutine<S, E, A>, companion: Coroutine<S, E, A1>): Coroutine<S, E, Pair<A, A1>> {
+            return parallel<S, E, A, A1>(this, companion, None(), None())
         },
 
         zip: function<A1>(this: Coroutine<S, E, A>, tail: Coroutine<S, E, A1>): Coroutine<S, E, Pair<A, A1>> {
@@ -320,6 +325,67 @@ let replicate = <S, E, A>(count: number, c: Coroutine<S, E, A>): List<Coroutine<
 // wait constructs a delay of the specified amount of ticks.
 export let wait = <S>(ticks: number): Coroutine<S, Unit, Unit> =>
     ticks <= 0 ? succeed<S, Unit, Unit>({}) : suspend<S, Unit>().bind<Unit>(() => wait<S>(ticks - 1))
+
+// parallel invokes two given `Coroutine`s at the same time. Returns a Pair of the two expected results.
+// The execution is interrupted if an error was raised from either executed coroutines.
+let parallel = <S, E, A, A1>(fst: Coroutine<S, E, A>, snd: Coroutine<S, E, A1>, res1: Option<A>, res2: Option<A1>): Coroutine<S, E, Pair<A, A1>> =>
+    Coroutine(Func(state => {
+        let getOrCompute = <B>(s: S, opt: Option<B>, computation: Coroutine<S, E, B>): Either<NoRes<S, E, B>, Pair<B, S>> => {
+            if (opt.kind == "some") {
+                return right<NoRes<S, E, B>, Pair<B, S>>().invoke(Pair(opt.value, s))
+            } else {
+                return computation.invoke(s)
+            }
+        }
+
+        let firstResult = getOrCompute(state, res1, fst)
+        let secondResult = getOrCompute(state, res2, snd)
+        if (firstResult.kind == "left" && firstResult.value.kind == "left") { // first Coroutine has failed.
+            return fail<S, E, Pair<A, A1>>(firstResult.value.value).invoke(state)
+        } else if (secondResult.kind == "left" && secondResult.value.kind == "left") { // second Coroutine has failed.
+            return fail<S, E, Pair<A, A1>>(secondResult.value.value).invoke(state)
+        } else if (firstResult.kind == "right" && secondResult.kind == "left" && secondResult.value.kind == "right") { // only the first one is done, second one suspended
+            let computedValue = firstResult.value.fst
+            let continuation = secondResult.value.value.snd
+
+            return suspend<S, E>()
+                .bind(() => parallel<S, E, A, A1>(succeed<S, E, A>(computedValue), continuation, Some(computedValue), None()))
+                .invoke(state)
+        } else if (firstResult.kind == "left" && secondResult.kind == "right" && firstResult.value.kind == "right") { // only the second one is done, first one suspended
+            let computedValue = secondResult.value.fst
+            let continuation = firstResult.value.value.snd
+        
+            return suspend<S, E>()
+                .bind(() => parallel<S, E, A, A1>(continuation, succeed<S, E, A1>(computedValue), None(), Some(computedValue)))
+                .invoke(state)
+        } else if (firstResult.kind == "right" && secondResult.kind == "right") { // both are done
+            return succeed<S, E, Pair<A, A1>>(Pair<A, A1>(firstResult.value.fst, secondResult.value.fst)).invoke(state)
+        } else if (firstResult.kind == "left" && secondResult.kind == "left") { // neither are done
+            // both Coroutines are suspended
+            if (firstResult.value.kind == "right" && secondResult.value.kind == "right") {
+                let x = firstResult.value.value.snd
+                let y = secondResult.value.value.snd
+
+                return suspend<S, E>().bind(() => parallel<S, E, A, A1>(x, y, res1, res2)).invoke(state)
+            }
+                
+            // only the first Coroutine is suspended
+            if (firstResult.value.kind == "right") {
+                let x = firstResult.value.value.snd
+
+                return suspend<S, E>().bind(() => parallel<S, E, A, A1>(x, snd, res1, res2)).invoke(state)
+            }
+                
+            // only the second Coroutine is suspended
+            if (secondResult.value.kind == "right") {
+                let y = secondResult.value.value.snd
+
+                return suspend<S, E>().bind(() => parallel<S, E, A, A1>(fst, y, res1, res2)).invoke(state)
+            }
+        }
+
+        throw new Error("UnsupportedOperation")
+    }))
 
 // `race` lets two given `Coroutine`s race it out, returning the result of the first `Coroutine` that completes its course.
 // The execution is interrupted if an error was raised from either executed coroutines.

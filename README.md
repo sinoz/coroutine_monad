@@ -137,8 +137,18 @@ Effects can also be raced:
 ```typescript
 let programA = wait(3).bind(() => succeed(1))
 let programB = wait(5).bind(() => succeed(2))
-let program = programA.raceAgainst(programB)
+let program = programA.raceAgainst(programB) // Returns Either<1, 2> when done
 ```
+
+And also ran in parallel:
+
+```typescript
+let programA = succeed(1)
+let programB = wait(1).bind(() => succeed(2))
+let program = programA.inParallelWith(programB) // Returns Pair<1, 2> when done
+```
+
+As assumed, the program does not finish until both processes have completed computing a result. The coroutine is interrupted is either `Coroutine`s fail.
 
 ## Combinating
 
