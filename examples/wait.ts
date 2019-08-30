@@ -1,5 +1,5 @@
-import { Coroutine, transform, putStrLn, wait } from "../src/coroutine"
-import { unsafeRunGetValue, unsafeRun } from "../src/runtime"
+import { transform, wait } from "../src/coroutine"
+import { unsafeRun } from "../src/runtime"
 import { Unit } from "../src/func"
 
 var program = wait<number>(1).bind(() => transform<number, Unit>(s => s * 2))
