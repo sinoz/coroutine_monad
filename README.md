@@ -75,6 +75,12 @@ let getAccountFromMemStore = (id: AccountId): Coroutine<Unit, AccountError, Opti
 let program = getAccountFromMemStore(id).orElse(getAccountFromDb(id))
 ```
 
+It is also possible to continuously retry an effect for numerous times or fallback to a default value:
+
+```typescript
+let program = computation.retry(10).orElse(defaultValue) 
+```
+
 You can also zip an effect with another, creating a `Coroutine` that produces a `Pair` of the two produced values.
 
 ```typescript
