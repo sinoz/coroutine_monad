@@ -159,6 +159,26 @@ describe('Coroutine combinators', function () {
     }
   });
 
+  it('retry', function () {
+    var numericVar = 0
+    let repetition = effect<Error, string>(() => {
+      numericVar++
+      if (numericVar <= 5) {
+        throw new Error("BOOM")
+      }
+
+      return "" + numericVar
+    }).retry(10)
+
+    unsafeRun(repetition, {})
+    expect(numericVar).equal(6)
+  });
+
+  it('retryJustError', function () {
+    let repetition = effect<Error, string>(() => { throw new Error("BOOM") }).retry(10)
+    expect(() => unsafeRun(repetition, {})).to.throw(Error)
+  });
+
   it('zip', function () {
     let programA = effect<string, number>(() => 64)
     let programB = effect<string, boolean>(() => true)

@@ -48,6 +48,8 @@ interface CoroutineOps<S, E, A> {
     raceAgainst: <S, E, A, A1>(competitor: Coroutine<S, E, A1>) => Coroutine<S, E, Either<A, A1>>
     inParallelWith: <S, E, A, A1>(companion: Coroutine<S, E, A1>) => Coroutine<S, E, Pair<A, A1>>
 
+    retry: <S, E, A>(count: number) => Coroutine<S, E, A>
+
     zip: <A1>(tail: Coroutine<S, E, A1>) => Coroutine<S, E, Pair<A, A1>>
 
     suspending: <S, E>() => Coroutine<S, E, Unit>
@@ -117,6 +119,10 @@ let Coroutine = <S, E, A>(c: CoroutineM<S, E, A>): Coroutine<S, E, A> => {
 
         inParallelWith: function<S, E, A, A1>(this: Coroutine<S, E, A>, companion: Coroutine<S, E, A1>): Coroutine<S, E, Pair<A, A1>> {
             return parallel<S, E, A, A1>(this, companion, None(), None())
+        },
+
+        retry: function<S, E, A>(this: Coroutine<S, E, A>, count: number): Coroutine<S, E, A> {
+            return retry<S, E, A>(this, count)
         },
 
         zip: function<A1>(this: Coroutine<S, E, A>, tail: Coroutine<S, E, A1>): Coroutine<S, E, Pair<A, A1>> {
@@ -307,15 +313,21 @@ let forEach = <S, E, A, A1>(l: List<A>) => (f: (_: A) => Coroutine<S, E, A1>): C
 // orElse provides an alternative `Coroutine` strategy to invoke if the given attempted `Coroutine`
 // has failed to produce a result. A failure is accepted as both an exception and any other kind of
 // error of `E`.
-let orElse = <S, E, A>(attempting: Coroutine<S, E, A>, alternative: Coroutine<S, E, A>): Coroutine<S, E, A> =>
+let orElse = <S, E, A>(procedure: Coroutine<S, E, A>, alternative: Coroutine<S, E, A>): Coroutine<S, E, A> =>
     Coroutine(Func(state => { // TODO refactor
-        let result = attempting.invoke(state)
+        let result = procedure.invoke(state)
         if (result.kind != "left" || result.value.kind == "right") {
             return result
         }
 
         return alternative.invoke(state)
     }))
+
+// retry will invoke the given `procedure` coroutine at least once and if failing, retry for the
+// specified amount of times until it is successful. If still not successful, it will simply
+// return the error of the last attempt.
+let retry = <S, E, A>(procedure: Coroutine<S, E, A>, count: number): Coroutine<S, E, A> =>
+    count <= 0 ? procedure : procedure.orElse(retry(procedure, count - 1))
 
 // Replicates the given `Coroutine` the specified amount of times, returning a `List`
 // with the given `Coroutine`, 
