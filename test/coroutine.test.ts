@@ -221,6 +221,27 @@ describe('Coroutine combinators', function () {
     }
   });
 
+  it('raceAgainstGetFirstOne', function () {
+    var x = 0
+    var y = 0
+
+    let programA = effect(() => { x++ })
+    let programB = effect(() => { y++ })
+
+    var program = programA.raceAgainst(programB)
+    let result = unsafeRun(program, {})
+
+    if (result.kind == "left") {
+      throw new Error("Effects cannot fail.")
+    }
+
+    let win = result.value.fst
+
+    expect(win.kind).equal("left")
+    expect(x).equal(1)
+    expect(y).equal(0)
+  });
+
   it('inParallelWith', function () {
     let programA = wait<Unit>(5).bind(() => succeed("A"))
     let programB = wait<Unit>(3).bind(() => succeed("B"))
